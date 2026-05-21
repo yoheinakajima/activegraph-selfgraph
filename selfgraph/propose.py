@@ -15,11 +15,10 @@ The proposal is wired to the Capability/API/Behavior nodes it
 *modify* (``PATCH_MODIFIES``). Every change kind is graph-native — no
 file writes, no shell, no arbitrary Python.
 
-The proposer composes the patch from the ActiveGraph primitives the
-extractor put in the graph: existing Behaviors with ``on=...`` event
-types, ObjectTypes, EventTypes, AuthorityRules. If a primitive isn't
-in the graph it isn't in the proposal — the agent works with what it
-has discovered, nothing more.
+The proposer composes proposals from discovered ActiveGraph
+primitives: Behaviors with ``on=...`` event types, ObjectTypes,
+EventTypes, and AuthorityRules already in the graph. If a primitive
+isn't in the graph it doesn't appear in the proposal.
 """
 
 from __future__ import annotations

@@ -65,7 +65,7 @@ def cmd_ask(args: list[str]) -> int:
 
 
 def cmd_propose(args: list[str]) -> int:
-    goal = " ".join(args) or "track project updates using whatever pattern makes sense"
+    goal = " ".join(args) or "track project updates"
     graph, rt = _open()
     pid = propose_patch_for(graph, goal)
     report = validate_proposal(graph, pid)

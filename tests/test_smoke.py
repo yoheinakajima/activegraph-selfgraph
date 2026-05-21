@@ -142,6 +142,20 @@ def test_sandbox_promote_changes_main_graph():
     assert g.get_object(pid).data["status"] == "applied"
 
 
+def test_validate_proposal_mutate_status_false():
+    """mutate_status=False returns a report without touching the
+    proposal's lifecycle status — used by cmd_promote to re-check a
+    persisted proposal without overwriting an existing status."""
+    g = _fresh()
+    ingest_paths(g, ["selfgraph/__init__.py"])
+    extract_capabilities(g, use_llm=False)
+    pid = propose_patch_for(g, "non-mutating recheck")
+    assert g.get_object(pid).data["status"] == "draft"
+    report = validate_proposal(g, pid, mutate_status=False)
+    assert report["ok"]
+    assert g.get_object(pid).data["status"] == "draft"
+
+
 def test_promote_lifecycle_requires_validated_status():
     """sandbox_apply must refuse to fork+apply a still-draft proposal."""
     g = _fresh()

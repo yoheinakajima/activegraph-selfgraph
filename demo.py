@@ -6,11 +6,10 @@ Walks the user through:
   2. "What can you do?"
   3. "Configure yourself to track project updates."
 
-Step 3 is intentionally vague. The agent composes a proposal from the
-ActiveGraph primitives the extractor put in the graph (Behaviors with
-``on=...`` event types, EventTypes, ObjectTypes, AuthorityRules) —
-not from any preconfigured plan shape. If a primitive isn't in the
-graph it doesn't appear in the proposal.
+Step 3 is intentionally vague. The agent composes proposals from
+discovered ActiveGraph primitives — the Behaviors, EventTypes,
+ObjectTypes, and AuthorityRules the extractor put in the graph.
+If a primitive isn't in the graph it doesn't appear in the proposal.
 """
 
 from __future__ import annotations

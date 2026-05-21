@@ -12,6 +12,12 @@ Behavior, an EventType, an ObjectType) isn't in the graph, it doesn't
 appear in the proposal — there are no hidden defaults driving the
 shape of an output.
 
+The capability graph is approximate: it is generated from
+introspection and regex/heuristic extraction, so some APIs and
+behaviors may be missed or mis-classified. Treat it as a working
+sketch the agent grounds proposals in, not a manifest. The detailed
+caveats are in *Limitations* below.
+
 ## Setup
 
 ```bash
