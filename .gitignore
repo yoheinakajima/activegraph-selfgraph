@@ -1,0 +1,6 @@
+.selfgraph/
+.selfgraph-demo/
+__pycache__/
+*.pyc
+.venv/
+*.db

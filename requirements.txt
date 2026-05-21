@@ -1,0 +1,3 @@
+activegraph>=1.0.5
+# Optional: only needed if you want LLM-driven extraction.
+# anthropic>=0.40
