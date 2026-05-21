@@ -1,5 +1,7 @@
 .selfgraph/
 .selfgraph-demo/
+.selfgraph-harness/
+harness/results/
 __pycache__/
 *.pyc
 .venv/

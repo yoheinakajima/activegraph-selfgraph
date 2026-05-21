@@ -217,20 +217,64 @@ def _change_summary(change: dict) -> str:
     return str(change)
 
 
-def _cite_change(graph: Graph, change: dict) -> list[str]:
-    """Return citation lines for a single proposed change."""
+def classify_change(graph: Graph, change: dict) -> str:
+    """Classify a proposed change into one of four origin categories.
+
+    Returns one of:
+      - "grounded-in-extracted": the change cites an extracted node
+        (GROUNDED_IN add_relation whose target ObjectType exists, or
+        bind_behavior whose target Behavior exists).
+      - "built-in-scaffold": add_object stamped with
+        source=selfgraph-fallback-scaffold.
+      - "self-authored": add_task / add_evaluation / add_policy —
+        boilerplate the proposer writes for every goal.
+      - "domain-new": add_object that introduces new state (the state
+        bucket) or an add_relation between newly proposed types.
+
+    This is the same taxonomy ``_cite_change`` renders as prose; the
+    harness reuses it directly so the measurement aggregates over the
+    exact categories the citation step shows the reader.
+    """
     kind = change.get("kind")
-    # Scaffold ObjectTypes — print the honest "not extracted" line.
     if kind == "add_object":
         data = change.get("data", {})
         if data.get("source") == "selfgraph-fallback-scaffold":
+            return "built-in-scaffold"
+        return "domain-new"
+    if kind == "add_relation":
+        if change.get("rel_type") == "GROUNDED_IN":
+            tgt_name = change.get("to_name")
+            for ot in graph.objects(type="ObjectType"):
+                if ot.data.get("name") == tgt_name:
+                    return "grounded-in-extracted"
+            return "domain-new"  # target missing — degenerate to structural
+        return "domain-new"
+    if kind == "bind_behavior":
+        beh_name = change.get("behavior")
+        for b in graph.objects(type="Behavior"):
+            if b.data.get("name") == beh_name:
+                return "grounded-in-extracted"
+        return "domain-new"  # unknown behavior — guardrail will reject
+    if kind in ("add_task", "add_evaluation", "add_policy",
+                "add_state_bucket"):
+        return "self-authored"
+    return "self-authored"
+
+
+def _cite_change(graph: Graph, change: dict) -> list[str]:
+    """Return citation lines for a single proposed change. The
+    category line is derived from :func:`classify_change` so the
+    harness and the citation reader can never drift."""
+    kind = change.get("kind")
+    category = classify_change(graph, change)
+    # Scaffold ObjectTypes — print the honest "not extracted" line.
+    if kind == "add_object":
+        if category == "built-in-scaffold":
             return ["↳ source: built-in atom/snapshot scaffold "
                     "(NOT extracted from any ingested file)"]
         return ["↳ source: domain object the proposal introduces "
                 "(no extraction citation — this is the new state)"]
     if kind == "add_relation":
-        # GROUNDED_IN edges are the actual citation arrows — find the
-        # target ObjectType and cite its extraction source.
         if change.get("rel_type") == "GROUNDED_IN":
             tgt_name = change.get("to_name")
             for ot in graph.objects(type="ObjectType"):
