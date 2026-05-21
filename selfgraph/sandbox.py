@@ -90,10 +90,22 @@ def _build_fork(graph: Graph, runtime: Optional[Runtime]):
             print(f"[sandbox] real fork failed, falling back: {e}")
 
     # Fallback: structural copy by replaying events into a new Graph.
+    # The public fork primitive (Runtime.fork) is SQLite-only; for the
+    # in-memory case there is no published replay-into-fresh-graph API
+    # in v1, so we use the documented internal projector entry point.
+    # This is the only private-API call in selfgraph; isolate it here.
     fresh = Graph(ids=IDGen(), run_id=graph.run_id + "-sandbox")
-    for ev in graph.events:
-        fresh._replay_event(ev)  # noqa: SLF001 — documented replay path
+    _replay_into(fresh, graph.events)
     return fresh, "in-memory-replay"
+
+
+def _replay_into(target: Graph, events) -> None:
+    """Project ``events`` into ``target`` without firing listeners or
+    persisting. Calls ``Graph._replay_event``, the documented replay
+    entry point used by ``Runtime.load`` and ``Runtime.fork``. If
+    ActiveGraph ships a public equivalent later, swap it in here."""
+    for ev in events:
+        target._replay_event(ev)  # noqa: SLF001 — see docstring
 
 
 # ---------- change applier ----------

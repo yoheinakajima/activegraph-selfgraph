@@ -86,9 +86,18 @@ def cmd_promote(args: list[str]) -> int:
         return 2
     pid = args[0]
     graph, rt = _open()
-    report = sandbox_apply(graph, pid, runtime=rt, promote=True)
-    print(f"[promote] done. fork={report['fork_label']} "
-          f"changes={report['applied_changes']}")
+    # Re-validate against the current persisted state — the graph may
+    # have changed between propose and promote (new ingestions, other
+    # patches), so a stale 'validated' marker is not enough.
+    # mutate_status=False so a re-check doesn't overwrite the existing
+    # lifecycle status on the proposal.
+    report = validate_proposal(graph, pid, mutate_status=False)
+    if not report["ok"]:
+        print(f"[promote] revalidation failed: {report['violations']}")
+        return 1
+    sandbox_report = sandbox_apply(graph, pid, runtime=rt, promote=True)
+    print(f"[promote] done. fork={sandbox_report['fork_label']} "
+          f"changes={sandbox_report['applied_changes']}")
     return 0
 
 
@@ -99,8 +108,9 @@ def cmd_chat(args: list[str]) -> int:
 
 
 def cmd_demo(args: list[str]) -> int:
-    # Defer to demo.py so the demo flow is in one place.
-    import demo  # noqa: F401 — runs at import
+    # demo.py is gated on __name__ == "__main__"; the import just gets
+    # us a handle to demo.run() so the scripted flow lives in one file.
+    import demo
     demo.run()
     return 0
 

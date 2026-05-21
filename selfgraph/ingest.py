@@ -39,8 +39,18 @@ def _now() -> str:
 
 
 def _emit_file(graph: Graph, path: str, kind: str, content: str) -> str:
-    """Create a File object + Chunk objects. Returns the file's object id."""
+    """Create a File object + Chunk objects. Returns the file's object id.
+
+    Dedupes on (path, sha256): if an unchanged File already exists for
+    this path, return its id and skip re-emitting chunks. Re-ingesting
+    a modified file emits a new File (content-addressed by hash), so
+    history is preserved without piling up identical copies.
+    """
     digest = _sha(content)
+    for existing in graph.objects(type="File"):
+        if (existing.data.get("path") == path
+                and existing.data.get("sha256") == digest):
+            return existing.id
     f = graph.add_object(
         "File",
         {
@@ -131,7 +141,10 @@ def ingest_module_docs(
                 continue
             try:
                 targets.append((info.name, importlib.import_module(info.name)))
-            except (SystemExit, BaseException) as e:  # noqa: BLE001
+            except SystemExit as e:
+                # A module that calls sys.exit() at import (CLI shims).
+                print(f"  [ingest] skip {info.name}: SystemExit({e.code})")
+            except Exception as e:  # noqa: BLE001 — optional deps / import errors
                 print(f"  [ingest] skip {info.name}: {e}")
     ids: list[str] = []
     for name, mod in targets:

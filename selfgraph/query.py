@@ -1,9 +1,11 @@
 """Self-query: answer questions about capabilities by reading the graph,
 not by re-prompting an LLM with the docs.
 
-The contract here is simple: every answer cites the graph nodes it came
-from. If a fact isn't in the graph, the agent says so — and the fix is
-to ingest more, not to make something up.
+This is keyword-overlap retrieval over the capability graph — not
+semantic understanding. Every answer cites the node ids it came from;
+if no node matches, the agent says so rather than inventing one. For
+richer matching, swap ``_explain_implementation`` for an LLM-backed
+retriever — the graph is the same either way.
 """
 
 from __future__ import annotations

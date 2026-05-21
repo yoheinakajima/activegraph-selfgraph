@@ -83,6 +83,80 @@ def test_proposal_rejected_for_unknown_behavior():
     assert any("unknown-behavior" in v[0] for v in report["violations"])
 
 
+def test_proposal_rejected_for_protected_type_add():
+    """Adding an AuthorityRule object without approval is blocked."""
+    g = _fresh()
+    ingest_paths(g, ["selfgraph/__init__.py"])
+    extract_capabilities(g, use_llm=False)
+    pid = propose_patch_for(g, "tighten policy")
+    proposal = g.get_object(pid)
+    bad_changes = list(proposal.data["changes"]) + [{
+        "kind": "add_object",
+        "type": "AuthorityRule",
+        "data": {"name": "self-grant", "rule": "agent may auto-promote"},
+    }, {
+        "kind": "add_object",
+        "type": "Capability",
+        "data": {"name": "secret-power", "description": "anything"},
+    }]
+    g.patch_object(pid, {"changes": bad_changes}, actor="test")
+    report = validate_proposal(g, pid)
+    assert not report["ok"]
+    assert sum(1 for v in report["violations"]
+               if v[0] == "protected-type") >= 2
+
+
+def test_proposal_rejected_for_unknown_change_kind():
+    g = _fresh()
+    ingest_paths(g, ["selfgraph/__init__.py"])
+    extract_capabilities(g, use_llm=False)
+    pid = propose_patch_for(g, "do thing")
+    proposal = g.get_object(pid)
+    bad_changes = list(proposal.data["changes"]) + [{
+        "kind": "spawn_subprocess",
+        "data": {"cmd": "ls"},
+    }, {
+        "kind": "add_policy",
+        "policy": {"scope": "X", "can_approve": ["AuthorityRule"]},
+    }]
+    g.patch_object(pid, {"changes": bad_changes}, actor="test")
+    report = validate_proposal(g, pid)
+    assert not report["ok"]
+    kinds = {v[0] for v in report["violations"]}
+    assert "disallowed-kind" in kinds
+    assert "permission-escalation" in kinds
+
+
+def test_sandbox_promote_changes_main_graph():
+    """promote=True must materialize new objects on the live graph and
+    leave the proposal in status='applied'."""
+    g = _fresh()
+    ingest_paths(g, ["selfgraph/__init__.py"])
+    extract_capabilities(g, use_llm=False)
+    pid = propose_patch_for(g, "watch repo")
+    validate_proposal(g, pid)
+    before = len(g.all_objects())
+    sandbox_apply(g, pid, promote=True)
+    after = len(g.all_objects())
+    assert after > before, "promote should add objects to the main graph"
+    assert g.get_object(pid).data["status"] == "applied"
+
+
+def test_promote_lifecycle_requires_validated_status():
+    """sandbox_apply must refuse to fork+apply a still-draft proposal."""
+    g = _fresh()
+    ingest_paths(g, ["selfgraph/__init__.py"])
+    extract_capabilities(g, use_llm=False)
+    pid = propose_patch_for(g, "no-validate-then-promote")
+    # Intentionally skip validate_proposal — proposal stays in 'draft'.
+    try:
+        sandbox_apply(g, pid, promote=True)
+    except ValueError as e:
+        assert "validated" in str(e)
+        return
+    raise AssertionError("expected ValueError; sandbox_apply accepted a draft")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

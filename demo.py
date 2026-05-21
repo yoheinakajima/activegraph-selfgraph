@@ -4,13 +4,13 @@ Walks the user through:
 
   1. "Read this repo and build your capability graph."
   2. "What can you do?"
-  3. "Configure yourself to track project updates using whatever
-      pattern makes sense."
+  3. "Configure yourself to track project updates."
 
-Step 3 is intentionally vague. The agent should NOT fall back to a
-hardcoded OODA/PDCA template. Instead it should look at what's in the
-capability graph (Behaviors, ObjectTypes, AuthorityRules) and assemble
-a structurally-grounded proposal.
+Step 3 is intentionally vague. The agent composes a proposal from the
+ActiveGraph primitives the extractor put in the graph (Behaviors with
+``on=...`` event types, EventTypes, ObjectTypes, AuthorityRules) —
+not from any preconfigured plan shape. If a primitive isn't in the
+graph it doesn't appear in the proposal.
 """
 
 from __future__ import annotations
@@ -63,9 +63,8 @@ def run() -> None:
     _banner("USER: How would you implement forking?")
     print(answer_question(graph, "how would you implement forking?"))
 
-    _banner("USER: Configure yourself to track project updates "
-            "using whatever pattern makes sense.")
-    goal = "track project updates using whatever pattern makes sense"
+    _banner("USER: Configure yourself to track project updates.")
+    goal = "track project updates"
     pid = propose_patch_for(graph, goal)
     proposal = graph.get_object(pid)
     print("\n[proposal rationale]")

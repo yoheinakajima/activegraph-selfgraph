@@ -47,18 +47,45 @@ def validate_proposal(
     proposal_id: str,
     *,
     approved_by: str = None,
+    mutate_status: bool = True,
 ) -> dict:
-    """Validate the PatchProposal with ``proposal_id``. Marks it
-    'validated' (or 'rejected') by emitting a patch on the proposal
-    object itself. Returns a report dict."""
+    """Validate the PatchProposal with ``proposal_id``. Returns a
+    report dict. By default also stamps the proposal's ``status`` to
+    'validated' or 'rejected'; pass ``mutate_status=False`` for a
+    pure read (e.g. promote-time re-check that should not overwrite
+    a status like 'applied')."""
     obj = graph.get_object(proposal_id)
     if obj is None or obj.type != "PatchProposal":
         raise GuardrailViolation(f"{proposal_id} is not a PatchProposal")
-    changes = obj.data.get("changes", [])
+    report = _check_proposal_data(graph, obj.data, approved_by=approved_by)
+    if mutate_status:
+        new_status = "validated" if report["ok"] else "rejected"
+        graph.patch_object(
+            proposal_id,
+            {"status": new_status, "validation_report": report},
+            actor="guardrails",
+            rationale=(
+                "All changes within allowed v1 surface."
+                if report["ok"] else
+                f"Rejected by {len(report['violations'])} rule(s)."
+            ),
+        )
+        print(f"[guardrails] {proposal_id} → {new_status} "
+              f"({len(report['violations'])} violation(s))")
+    else:
+        print(f"[guardrails] {proposal_id} re-checked "
+              f"(ok={report['ok']}, violations={len(report['violations'])})")
+    return report
+
+
+def _check_proposal_data(graph: Graph, data: dict, *, approved_by) -> dict:
+    """Pure check against a proposal's data blob. Does not mutate."""
+    changes = data.get("changes", [])
     report = {"checked": len(changes), "violations": [], "ok": True}
 
-    # Banned-token scan over the entire proposal payload.
-    for hit in _scan_banned(obj.data):
+    # Banned-token scan over the entire proposal payload. Substring
+    # matching is demo-grade — see README for the full caveat.
+    for hit in _scan_banned(data):
         report["violations"].append(("banned-token", -1, hit))
 
     for i, change in enumerate(changes):
@@ -80,7 +107,6 @@ def validate_proposal(
                 )
         if kind == "add_policy":
             policy = change.get("policy", {})
-            # Refuse policies that escalate by claiming approval rights.
             if "can_approve" in policy:
                 report["violations"].append(
                     ("permission-escalation", i,
@@ -97,19 +123,6 @@ def validate_proposal(
                 )
 
     report["ok"] = not report["violations"]
-    new_status = "validated" if report["ok"] else "rejected"
-    graph.patch_object(
-        proposal_id,
-        {"status": new_status, "validation_report": report},
-        actor="guardrails",
-        rationale=(
-            "All changes within allowed v1 surface."
-            if report["ok"] else
-            f"Rejected by {len(report['violations'])} rule(s)."
-        ),
-    )
-    print(f"[guardrails] {proposal_id} → {new_status} "
-          f"({len(report['violations'])} violation(s))")
     return report
 
 

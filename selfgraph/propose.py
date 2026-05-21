@@ -15,10 +15,11 @@ The proposal is wired to the Capability/API/Behavior nodes it
 *modify* (``PATCH_MODIFIES``). Every change kind is graph-native — no
 file writes, no shell, no arbitrary Python.
 
-Pattern choice is intentionally not hardcoded. We look at what's in the
-capability graph (existing Behaviors with ``on=...`` event types,
-ObjectTypes, AuthorityRules) and assemble a small pipeline using only
-the primitives the graph reports it has.
+The proposer composes the patch from the ActiveGraph primitives the
+extractor put in the graph: existing Behaviors with ``on=...`` event
+types, ObjectTypes, EventTypes, AuthorityRules. If a primitive isn't
+in the graph it isn't in the proposal — the agent works with what it
+has discovered, nothing more.
 """
 
 from __future__ import annotations
@@ -82,27 +83,23 @@ def propose_patch_for(
             f"a binding the runtime already supports."
         )
     if not bound:
-        # No existing behaviors fired — derive the pattern from what's
-        # actually in the graph. The shape is NOT a hardcoded
-        # OODA/PDCA template; it's composed from:
-        #   - the most common EventType ingested (the trigger surface)
-        #   - extracted ObjectTypes whose names overlap the goal
-        #     (the "what is this about" anchor)
-        #   - the existing AuthorityRule list (the constraint surface)
-        # If the graph is sparse the pattern degenerates to "atom +
-        # snapshot + an event-typed trigger" — still graph-native, not
-        # phase-named.
+        # No extracted Behavior subscribed to a goal-relevant event, so
+        # the proposal is composed from the ActiveGraph primitives the
+        # extractor did find: the most common EventType in the ingested
+        # trace, existing ObjectTypes whose names overlap the goal, and
+        # the AuthorityRule list. The shape is intentionally minimal —
+        # an atom ObjectType for individual records, a snapshot
+        # ObjectType for aggregated state, and ROLLS_UP_INTO /
+        # GROUNDED_IN relations between them.
         trigger = _dominant_event_type(extracted, default="object.created")
         atom_type = f"{bucket}Atom"
         snapshot_type = f"{bucket}Snapshot"
         rationale_lines.append(
-            f"No existing behavior subscribed to a goal-matching event. "
-            f"Composing a graph-native pattern from the trace: "
-            f"{atom_type} as the per-update atom, {snapshot_type} as the "
-            f"rolled-up state, OBSERVES on '{trigger}' (the most common "
-            f"event type in the ingested graph). No phase names — the "
-            f"shape comes from extracted EventTypes and ObjectTypes, "
-            f"not from a template."
+            f"No extracted Behavior matched the goal. Composing from "
+            f"discovered ActiveGraph primitives: {atom_type} for each "
+            f"observed record, {snapshot_type} for the aggregated view, "
+            f"triggered on '{trigger}' (the most common EventType in "
+            f"the ingested graph)."
         )
         for t, desc in (
             (atom_type,    f"Single observed update for the goal: {goal}"),
