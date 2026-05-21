@@ -129,6 +129,134 @@ def _list_by_type(graph: Graph, question: str) -> str:
     return "\n".join(out)
 
 
+def trace_grounding(graph: Graph, proposal_id: str) -> str:
+    """Walk PATCH_PROPOSES / PATCH_MODIFIES / GROUNDED_IN edges from a
+    PatchProposal and render the citation chain back to the ingested
+    File / module:// pseudo-file that produced each extracted node.
+
+    The point of this reader is to make the agent's grounding visible:
+    every change in a proposal either cites an extracted node (with a
+    real source path) or carries a ``source=selfgraph-fallback-scaffold``
+    tag, in which case the trace says so explicitly.
+    """
+    proposal = graph.get_object(proposal_id)
+    if proposal is None or proposal.type != "PatchProposal":
+        return f"(not a PatchProposal: {proposal_id})"
+    lines: list[str] = [
+        f"Grounding citations for {proposal_id}  "
+        f"(used_fallback_scaffold={proposal.data.get('used_fallback_scaffold')})",
+    ]
+
+    # PATCH_PROPOSES — capabilities the proposal uses.
+    proposes = [r for r in graph.relations(source=proposal_id)
+                if r.type == "PATCH_PROPOSES"]
+    if proposes:
+        lines.append("  PATCH_PROPOSES (capabilities this proposal exercises):")
+        for r in proposes:
+            cap = graph.get_object(r.target)
+            if cap:
+                lines.append(
+                    f"    → {cap.type}:{cap.data.get('name')}  ({cap.id})  "
+                    f"{_source_citation(graph, cap)}"
+                )
+
+    # PATCH_MODIFIES — extracted ObjectTypes the proposal grounds itself in.
+    modifies = [r for r in graph.relations(source=proposal_id)
+                if r.type == "PATCH_MODIFIES"]
+    if modifies:
+        lines.append("  PATCH_MODIFIES (extracted ObjectTypes the proposal grounds in):")
+        for r in modifies:
+            ot = graph.get_object(r.target)
+            if ot:
+                lines.append(
+                    f"    → {ot.type}:{ot.data.get('name')}  ({ot.id})  "
+                    f"{_source_citation(graph, ot)}"
+                )
+
+    # Per-change citations — walk each proposed change and report whether
+    # it's grounded (cites an extracted node) or scaffold (a default).
+    lines.append("  per-change provenance:")
+    for i, change in enumerate(proposal.data.get("changes", [])):
+        lines.append(f"    [{i}] {change.get('kind'):14}  "
+                     f"{_change_summary(change)}")
+        for cite in _cite_change(graph, change):
+            lines.append(f"          {cite}")
+
+    return "\n".join(lines)
+
+
+def _source_citation(graph: Graph, obj) -> str:
+    """Cite an extracted node back to its ingest source. Seed nodes
+    (Capability/AuthorityRule planted by extract._seed) carry no source
+    and are labelled '(seed)'."""
+    data = obj.data
+    if "source_file_path" in data:
+        return f"[extracted from: {data['source_file_path']}]"
+    if data.get("source") == "selfgraph-fallback-scaffold":
+        return "[scaffold: built-in fallback shape, not extracted]"
+    if data.get("source") == "llm":
+        return "[extracted by: optional LLM augmentation pass]"
+    return "[seed: planted by extract._seed, not extracted from a file]"
+
+
+def _change_summary(change: dict) -> str:
+    if change.get("kind") in ("add_object", "add_state_bucket",
+                              "add_task", "add_evaluation"):
+        d = change.get("data", {})
+        label = (d.get("name") or d.get("goal", "")[:40]
+                 or d.get("criterion", "")[:40])
+        return f"{change.get('type', '?'):14}  {label}"
+    if change.get("kind") == "add_relation":
+        return (f"{change.get('rel_type', '?'):20}  "
+                f"{change.get('from_type')}:{change.get('from_name')} → "
+                f"{change.get('to_type')}:{change.get('to_name')}")
+    if change.get("kind") == "add_policy":
+        return f"Policy           scope={change.get('policy', {}).get('scope')}"
+    if change.get("kind") == "bind_behavior":
+        return (f"{change.get('behavior'):20}  on={change.get('on_event_type')}")
+    return str(change)
+
+
+def _cite_change(graph: Graph, change: dict) -> list[str]:
+    """Return citation lines for a single proposed change."""
+    kind = change.get("kind")
+    # Scaffold ObjectTypes — print the honest "not extracted" line.
+    if kind == "add_object":
+        data = change.get("data", {})
+        if data.get("source") == "selfgraph-fallback-scaffold":
+            return ["↳ source: built-in atom/snapshot scaffold "
+                    "(NOT extracted from any ingested file)"]
+        return ["↳ source: domain object the proposal introduces "
+                "(no extraction citation — this is the new state)"]
+    if kind == "add_relation":
+        # GROUNDED_IN edges are the actual citation arrows — find the
+        # target ObjectType and cite its extraction source.
+        if change.get("rel_type") == "GROUNDED_IN":
+            tgt_name = change.get("to_name")
+            for ot in graph.objects(type="ObjectType"):
+                if ot.data.get("name") == tgt_name:
+                    return [f"↳ GROUNDED_IN target {tgt_name}  "
+                            f"{_source_citation(graph, ot)}"]
+            return [f"↳ GROUNDED_IN target {tgt_name}  (target not found)"]
+        return ["↳ structural relation between newly proposed types"]
+    if kind == "bind_behavior":
+        beh_name = change.get("behavior")
+        for b in graph.objects(type="Behavior"):
+            if b.data.get("name") == beh_name:
+                return [f"↳ binds extracted Behavior {beh_name}  "
+                        f"{_source_citation(graph, b)}"]
+        return [f"↳ binds {beh_name} (unknown to the graph — guardrail "
+                f"will reject)"]
+    if kind == "add_task":
+        return ["↳ task object: encodes the user's goal in graph form"]
+    if kind == "add_evaluation":
+        return ["↳ evaluation criterion (selfgraph-authored)"]
+    if kind == "add_policy":
+        return ["↳ policy whose can_create is derived from the "
+                "ObjectTypes this proposal introduces"]
+    return []
+
+
 def _grep_graph(graph: Graph, question: str) -> str:
     """Last-resort: substring search across object data."""
     needle = question.lower().strip("? ")

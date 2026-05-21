@@ -104,24 +104,44 @@ selfgraph/
 `CAPABILITY_REQUIRES_APPROVAL`, `PATCH_PROPOSES`, `PATCH_MODIFIES`,
 `ROLLS_UP_INTO`, `GROUNDED_IN`.
 
-### Guardrails (demo-grade)
+### Guardrails
 
-| Allowed change kinds | Rejected |
-| --- | --- |
-| `add_object`, `add_relation`, `add_policy`, `add_state_bucket`, `add_task`, `add_evaluation`, `bind_behavior` | shell / `subprocess` / `os.system` / `__import__` / `exec(` / `eval(` / network calls / file writes, mutations of `AuthorityRule` or `Capability` without explicit approval, `bind_behavior` for behaviors not already in the graph, policies that declare `can_approve` |
+The **primary control is structural**. A v1 PatchProposal can only
+call these change kinds:
 
-The token list is substring-based — easy to read, easy to extend,
-and easy to evade. False-positives on docs that *mention* banned
-tokens are possible; obfuscated payloads can slip through. Treat this
-as a sketch of what the policy boundary looks like, not a hardened
-sandbox. Production deployments should replace it with an AST scan
-plus per-type capability checks.
+`add_object`, `add_relation`, `add_policy`, `add_state_bucket`,
+`add_task`, `add_evaluation`, `bind_behavior` (to an existing
+discovered behavior only).
 
-The guardrail also does not yet distinguish *domain* ObjectTypes
-(safe — e.g. `ProjectUpdate`) from *runtime ontology* ObjectTypes
-(`Capability`, `AuthorityRule`) beyond a hand-maintained `_PROTECTED_TYPES`
-list. A real version of this would carry that distinction on the
-ObjectType node itself.
+There is no change kind that authors a new Python function, executes
+shell, opens a socket, or writes to disk outside the SQLite event
+store. The agent literally cannot introduce code — that's the safety
+guarantee. `bind_behavior` is also restricted to behavior names that
+already appear in the extracted capability graph; the validator rejects
+references to anything else.
+
+The **secondary control** is a demo-grade substring banlist over the
+proposal payload (`subprocess`, `exec(`, `eval(`, `os.system`, …) plus
+a hand-maintained `_PROTECTED_TYPES` list that blocks adding
+`AuthorityRule` or `Capability` nodes without explicit approval, and a
+check that policies don't declare `can_approve`. Defense in depth — but
+the substring scan is easy to evade and can false-positive on docs that
+*mention* banned tokens, so treat it as a sketch, not a hardened
+sandbox. A production version would replace it with an AST scan and
+carry the domain-vs-ontology ObjectType distinction on the ObjectType
+node itself, not in a hand-maintained list.
+
+#### PatchProposal lifecycle
+
+`draft → validated → applied`  (happy path) or  `draft → rejected`.
+
+Transitions are convention, enforced at two call sites — not a state
+machine. `validate_proposal` flips `draft → validated|rejected` and
+emits a `patch.applied` event recording the report. `sandbox_apply`
+with `promote=True` flips `validated → applied`. `sandbox_apply` refuses
+to act on a proposal that isn't `validated`; `cmd_promote` re-runs the
+validation (with `mutate_status=False`) immediately before applying so
+a stale marker cannot bypass the guardrail.
 
 `tests/test_smoke.py` exercises the accept path and several reject
 paths (banned-token injection, unknown-behavior binding, protected
@@ -137,6 +157,15 @@ where this lives if a public equivalent ships later.
 
 ## Limitations (v1, on purpose)
 
+- **The fallback structure is a built-in scaffold, not a discovered
+  pattern.** When no extracted Behavior matches the goal, the
+  proposer falls back to a fixed atom/snapshot/ROLLS_UP_INTO shape
+  shipped with selfgraph. Only the trigger EventType is observed from
+  the graph; the structure itself is defaulted. The proposal rationale
+  prefixes that branch with `[FALLBACK]`, scaffold ObjectTypes are
+  stamped `source: selfgraph-fallback-scaffold`, and the demo's
+  grounding-trace step labels them explicitly so a reader can tell
+  observed shape from defaulted shape at a glance.
 - **No arbitrary code in patches.** `bind_behavior` references only
   behaviors already discovered by the extractor. The agent cannot
   author a new Python function from a goal.

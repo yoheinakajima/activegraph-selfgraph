@@ -24,7 +24,7 @@ from selfgraph.extract import extract_capabilities
 from selfgraph.guardrails import validate_proposal
 from selfgraph.ingest import ingest_module_docs, ingest_paths
 from selfgraph.propose import propose_patch_for
-from selfgraph.query import answer_question, summarize_capabilities
+from selfgraph.query import answer_question, summarize_capabilities, trace_grounding
 from selfgraph.sandbox import sandbox_apply
 
 
@@ -75,7 +75,27 @@ def run() -> None:
     for e in proposal.data["evaluation"]:
         print(f"  - {e}")
 
-    _banner("Guardrails")
+    _banner("Grounding citations")
+    # Walk PATCH_PROPOSES / PATCH_MODIFIES / GROUNDED_IN edges and cite
+    # each proposed change back to the ingested file/module that
+    # produced its extracted source. Scaffold changes are labelled.
+    print(trace_grounding(graph, pid))
+
+    _banner("Guardrails  (primary: structural; secondary: token scan)")
+    # PRIMARY control: v1 patches can only call add_object,
+    # add_relation, add_policy, add_state_bucket, add_task,
+    # add_evaluation, or bind_behavior-to-an-existing-behavior. There
+    # is no kind that authors or executes code, so the agent cannot
+    # introduce a new Python function from a goal — that's the actual
+    # safety guarantee.
+    # SECONDARY control: a substring banlist over the proposal payload
+    # (subprocess, exec, eval, ...). Defense in depth, but evadable
+    # and demo-grade.
+    print("  primary control:   structural — v1 patches can ONLY use "
+          "add_object / add_relation / add_policy / add_state_bucket / "
+          "add_task / add_evaluation / bind_behavior(existing).")
+    print("  secondary control: substring banlist on the proposal payload "
+          "(demo-grade; evadable).")
     report = validate_proposal(graph, pid)
     print(f"  ok={report['ok']}  checked={report['checked']}  "
           f"violations={len(report['violations'])}")

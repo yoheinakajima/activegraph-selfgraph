@@ -11,7 +11,10 @@ Verifies:
 
 from __future__ import annotations
 
-from activegraph import Graph, IDGen
+import os
+import tempfile
+
+from activegraph import Graph, IDGen, Runtime
 
 from selfgraph.extract import extract_capabilities
 from selfgraph.guardrails import validate_proposal
@@ -154,6 +157,39 @@ def test_validate_proposal_mutate_status_false():
     report = validate_proposal(g, pid, mutate_status=False)
     assert report["ok"]
     assert g.get_object(pid).data["status"] == "draft"
+
+
+def test_sandbox_sqlite_fork_isolates_main_graph():
+    """The safety centerpiece: with a SQLite-backed runtime, sandbox
+    apply must take the real Runtime.fork path and produce a diff
+    against an *isolated* fork — the live graph must be untouched
+    until promote=True. Covers the fork-before-promote claim that
+    the in-memory replay test cannot."""
+    with tempfile.TemporaryDirectory() as td:
+        db = os.path.join(td, "fork-test.db")
+        graph = Graph(ids=IDGen(), run_id="fork-test")
+        rt = Runtime(graph, persist_to=db)
+        ingest_paths(graph, ["selfgraph/__init__.py"])
+        extract_capabilities(graph, use_llm=False)
+        pid = propose_patch_for(graph, "fork isolation test")
+        validate_proposal(graph, pid)
+
+        objects_before = len(graph.all_objects())
+        relations_before = len(graph.all_relations())
+
+        report = sandbox_apply(graph, pid, runtime=rt, promote=False)
+
+        # The fork path must be the SQLite one, not in-memory replay.
+        assert report["fork_label"].startswith("sqlite-fork@"), \
+            f"expected sqlite-fork, got {report['fork_label']!r}"
+        # Fork produced visible changes.
+        assert report["diff"]["added_objects"], \
+            "fork report must show added objects"
+        # Live graph is untouched — promote=False.
+        assert len(graph.all_objects()) == objects_before
+        assert len(graph.all_relations()) == relations_before
+        # The proposal stays validated, not applied.
+        assert graph.get_object(pid).data["status"] == "validated"
 
 
 def test_promote_lifecycle_requires_validated_status():

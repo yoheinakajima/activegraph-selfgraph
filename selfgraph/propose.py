@@ -82,23 +82,25 @@ def propose_patch_for(
             f"a binding the runtime already supports."
         )
     if not bound:
-        # No extracted Behavior subscribed to a goal-relevant event, so
-        # the proposal is composed from the ActiveGraph primitives the
-        # extractor did find: the most common EventType in the ingested
-        # trace, existing ObjectTypes whose names overlap the goal, and
-        # the AuthorityRule list. The shape is intentionally minimal —
-        # an atom ObjectType for individual records, a snapshot
-        # ObjectType for aggregated state, and ROLLS_UP_INTO /
-        # GROUNDED_IN relations between them.
+        # No extracted Behavior subscribed to a goal-relevant event.
+        # Fall back to the built-in atom/snapshot scaffold — a default
+        # structure that ships with selfgraph, NOT something composed
+        # from extracted primitives. Be explicit about this in the
+        # rationale so the demo output admits when it's leaning on a
+        # template. Only the trigger event type is observed; the
+        # atom/snapshot shape itself is the default.
         trigger = _dominant_event_type(extracted, default="object.created")
         atom_type = f"{bucket}Atom"
         snapshot_type = f"{bucket}Snapshot"
         rationale_lines.append(
-            f"No extracted Behavior matched the goal. Composing from "
-            f"discovered ActiveGraph primitives: {atom_type} for each "
-            f"observed record, {snapshot_type} for the aggregated view, "
-            f"triggered on '{trigger}' (the most common EventType in "
-            f"the ingested graph)."
+            f"[FALLBACK] No discovered Behavior matched the goal. "
+            f"Falling back to the built-in atom/snapshot scaffold "
+            f"(a default structure shipped with selfgraph, not derived "
+            f"from extracted primitives): {atom_type} for each observed "
+            f"record, {snapshot_type} for the aggregated view. "
+            f"OBSERVED: trigger event type '{trigger}' (the most common "
+            f"EventType in the ingested graph). DEFAULTED: the "
+            f"atom/snapshot/ROLLS_UP_INTO structure itself."
         )
         for t, desc in (
             (atom_type,    f"Single observed update for the goal: {goal}"),
@@ -108,7 +110,8 @@ def propose_patch_for(
                 "kind": "add_object",
                 "type": "ObjectType",
                 "data": {"name": t, "description": desc,
-                         "trigger_event": trigger},
+                         "trigger_event": trigger,
+                         "source": "selfgraph-fallback-scaffold"},
             })
         changes.append({
             "kind": "add_relation",
@@ -170,7 +173,10 @@ def propose_patch_for(
             "data": {"criterion": crit, "for_goal": goal},
         })
 
-    # Materialize the proposal as an Object.
+    # Materialize the proposal as an Object. `used_fallback_scaffold`
+    # is the machine-readable flag downstream readers (the demo's
+    # grounding-trace step) use to surface when the structure came
+    # from the default scaffold rather than from discovered behaviors.
     proposal = graph.add_object(
         "PatchProposal",
         {
@@ -180,20 +186,29 @@ def propose_patch_for(
             "evaluation": evaluation,
             "status": "draft",
             "proposed_by": proposed_by,
+            "used_fallback_scaffold": not bound,
         },
         actor=proposed_by,
     )
     print(f"[propose] drafted PatchProposal {proposal.id} with "
           f"{len(changes)} changes")
 
-    # Wire PATCH_PROPOSES / PATCH_MODIFIES so a graph reader can see
-    # what the proposal touches without re-parsing its data blob.
+    # Wire PATCH_PROPOSES (to capabilities the proposal uses) and
+    # PATCH_MODIFIES (to extracted ObjectTypes the proposal grounds
+    # itself in via GROUNDED_IN). These edges are the citation surface
+    # the demo's grounding-trace step walks.
     for cap in graph.objects(type="Capability"):
         if cap.data.get("name") in {"propose-patch", "extract-capability"}:
             graph.add_relation(proposal.id, cap.id, "PATCH_PROPOSES",
                                actor=proposed_by)
+    grounded_targets = {
+        c.get("to_name") for c in changes
+        if c.get("kind") == "add_relation"
+        and c.get("rel_type") == "GROUNDED_IN"
+        and c.get("to_type") == "ObjectType"
+    }
     for ot in graph.objects(type="ObjectType"):
-        if ot.data.get("name") in {bucket, "Task", "Phase"}:
+        if ot.data.get("name") in grounded_targets:
             graph.add_relation(proposal.id, ot.id, "PATCH_MODIFIES",
                                actor=proposed_by)
 

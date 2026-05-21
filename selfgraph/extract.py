@@ -167,6 +167,10 @@ def _find_by_name(graph: Graph, type_: str, name: str):
 def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
     text = chunk.data.get("text", "")
     path = chunk.data.get("file_path", "")
+    # Every Object the extractor emits carries source_chunk_id +
+    # source_file_path so the grounding-trace step can cite back to a
+    # real ingested artifact (a File or a module:// pseudo-file).
+    src = {"source_chunk_id": chunk.id, "source_file_path": path}
     delta = {"API": 0, "Behavior": 0, "Example": 0, "Constraint": 0,
              "ObjectType": 0, "RelationType": 0}
 
@@ -176,14 +180,14 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
             "name": fname, "kind": kind,
             "on": _parse_list(_RE_ON_LIST.search(args)),
             "creates": _parse_list(_RE_CREATES_LIST.search(args)),
-            "source_file": path,
+            **src,
         })
         if b:
             delta["Behavior"] += 1
             graph.add_relation(b.id, chunk.id, "EXAMPLE_DEMONSTRATES",
                                actor="extract")
             for ev in _parse_list(_RE_ON_LIST.search(args)):
-                t = _add_unique(graph, "EventType", {"name": ev})
+                t = _add_unique(graph, "EventType", {"name": ev, **src})
                 if t:
                     graph.add_relation(b.id, t.id, "BEHAVIOR_SUBSCRIBES_TO",
                                        actor="extract")
@@ -191,7 +195,7 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
     # Tool registrations
     for fname in _RE_TOOL_DECO.findall(text):
         api = _add_unique(graph, "API", {
-            "name": fname, "kind": "tool", "source_file": path,
+            "name": fname, "kind": "tool", **src,
         })
         if api:
             delta["API"] += 1
@@ -202,6 +206,7 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
             api = _add_unique(graph, "API", {
                 "name": sym, "signature": (sig or "").strip(),
                 "module": path.removeprefix("module://"),
+                **src,
             })
             if api:
                 delta["API"] += 1
@@ -224,14 +229,14 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
 
     # Object types referenced via add_object("Type", ...) or similar
     for typename in set(_RE_OBJTYPE_HINT.findall(text)):
-        t = _add_unique(graph, "ObjectType", {"name": typename})
+        t = _add_unique(graph, "ObjectType", {"name": typename, **src})
         if t:
             delta["ObjectType"] += 1
 
     # Markdown examples
     if "```" in text and path.endswith(".md"):
         ex = _add_unique(graph, "Example", {
-            "source_file": path, "snippet": text[:600],
+            "snippet": text[:600], **src,
         })
         if ex:
             delta["Example"] += 1
@@ -239,7 +244,7 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
     # Constraints: any "must" / "must not" sentence
     for sent in _RE_MUST.findall(text):
         c = _add_unique(graph, "Constraint", {
-            "text": sent.strip(), "source_file": path,
+            "text": sent.strip(), **src,
         })
         if c:
             delta["Constraint"] += 1
