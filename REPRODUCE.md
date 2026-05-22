@@ -83,7 +83,7 @@ grep -nE 'anthropic|Anthropic|messages\.create|claude|llm_provider|LLMProvider' 
 | `harness/results/corpus.literal.jsonl`     | 45 mechanical goals (BEFORE) × propose → validate → sandbox(promote=False)               |
 | `harness/results/corpus.relaxed.jsonl`     | 72 mechanical goals (AFTER) × propose → validate → sandbox(promote=False)                |
 | `harness/results/adversarial.jsonl`        | 28 mechanical adversarial attempts, one row per attempt, with caught/expected            |
-| `harness/results/rollback.jsonl`           | 5 promote=True runs with byte-identical replay-to-before-promote                         |
+| `harness/results/rollback.jsonl`           | 72 promote=True runs (every guardrail-validated relaxed corpus proposal incl. all 9 bindings) with byte-identical replay-to-before-promote |
 | `harness/results/future_event.jsonl`       | 3 bind_behavior trials (one per bound diligence behavior); treatment vs control firing   |
 | `harness/results/extractor_recall.json`    | per-mode recall of the existing extractor over the activegraph runtime, AST denominator  |
 | `harness/results/*.meta.json`              | per-run aggregate (counts, llm-active flag, objecttype-match-mode, jsonl sha)            |
@@ -160,6 +160,48 @@ variable guarantee — only the extractor rule moves — is what makes
 the runtime-derived 18/27 finding a causal result, not a confound.
 If that invariant fails on your machine `reproduce.sh` exits non-zero
 with a `MISMATCH` line.
+
+## Rollback precondition (`rollback.jsonl`)
+
+`harness/rollback_precondition.py` runs every guardrail-validated
+proposal from the relaxed corpus pipeline through a promote +
+replay-to-before-promote check. The selection rule is mechanical:
+
+* Reproduce the corpus.relaxed pipeline (same ingest, same extract,
+  same `generate_goal_set` import from `harness.run_corpus`).
+* Call `propose_patch_for + validate_proposal` on every goal in
+  order; every proposal whose guardrail validation passes becomes a
+  rollback trial. On the reference machine this yields **n = 72**
+  promotions — every relaxed-corpus proposal, including all 9
+  bind_behavior proposals (PatchProposal#578 / #579 / #580 /
+  #587 / #588 / #589 / #596 / #597 / #598). No cherry-picking.
+
+Each promotion runs in a `Runtime.fork` taken at the moment of the
+proposal's validation; the fork shares the SQLite file with the main
+pipeline graph but operates under a distinct run_id, so the wider
+sample neither contaminates other trials nor mutates the main
+pipeline (the corpus.literal / corpus.relaxed shas are unaffected by
+this run, which `reproduce.sh` verifies on every cold run).
+
+Per trial we record:
+
+* `n_promote_events == n_changes + 1` (one event per change plus the
+  proposal status patch — the strict expectation; some add_relation
+  changes legitimately drop when their endpoint names don't resolve)
+* `all_changes_logged`: did promote produce enough actor=`promote`
+  events to account for every allowed-kind change
+* `replay_byte_identical`: opening a fresh `SQLiteEventStore` for the
+  fork's run_id and replaying its events into an empty Graph,
+  stopping just before the first promote-actor event, reconstructs
+  a snapshot byte-identical to the pre-promote snapshot (objects,
+  relations, AND the full event log)
+
+The committed result table (reference machine):
+
+| metric                                    | overall (n=72) | bind_behavior subset (n=9) |
+| ----------------------------------------- | -------------- | -------------------------- |
+| `all_changes_logged`                      | 72/72 (100%)   | 9/9 (100%)                 |
+| `replay_byte_identical`                   | 72/72 (100%)   | 9/9 (100%)                 |
 
 ## Future-event mechanism test (`future_event.jsonl`)
 

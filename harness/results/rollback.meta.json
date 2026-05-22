@@ -1,9 +1,17 @@
 {
-  "n_promotions": 5,
-  "n_all_changes_logged": 5,
-  "n_replay_byte_identical": 5,
+  "n_goals_in_corpus_pipeline": 72,
+  "n_promotions": 72,
+  "n_skipped_guardrail_rejected": 0,
+  "skipped_goals": [],
+  "n_all_changes_logged": 72,
+  "n_replay_byte_identical": 72,
+  "n_with_binding": 9,
+  "n_binding_all_changes_logged": 9,
+  "n_binding_replay_byte_identical": 9,
+  "selection_rule": "Every guardrail-validated proposal produced by the run_corpus.py pipeline under SELFGRAPH_OBJECTTYPE_MATCH=relaxed (same ingest, same extract, same generate_goal_set, same order). Each promotion runs in a Runtime.fork taken at the moment of the proposal's validation; forks share the SQLite file but use distinct run_ids so they neither see each other nor mutate the main pipeline graph.",
   "db_path": ".selfgraph-rollback/graph.db",
   "jsonl_path": "harness/results/rollback.jsonl",
-  "jsonl_sha256_16": "4e6333398e82e127",
-  "llm_augment_active": false
+  "jsonl_sha256_16": "ff7353d410ea7379",
+  "llm_augment_active": false,
+  "objecttype_match_mode": "relaxed"
 }
