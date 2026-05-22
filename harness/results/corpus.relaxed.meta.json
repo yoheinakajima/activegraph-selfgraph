@@ -9,7 +9,7 @@
   ],
   "db_path": ".selfgraph-harness/graph.db",
   "jsonl_path": "harness/results/corpus.relaxed.jsonl",
-  "jsonl_sha256_16": "74bd52ff901bc1bc",
+  "jsonl_sha256_16": "3277086cf459e945",
   "fork_violations": [],
   "isolation_violations": [],
   "llm_augment_active": false,

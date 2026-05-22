@@ -17,7 +17,7 @@ and asserts the regenerated files match these recorded shas:
 | file                      | sha256[:16]        | condition                                |
 | ------------------------- | ------------------ | ---------------------------------------- |
 | `corpus.literal.jsonl`    | `57a86e94ba5e211d` | `SELFGRAPH_OBJECTTYPE_MATCH=literal` (BEFORE) |
-| `corpus.relaxed.jsonl`    | `74bd52ff901bc1bc` | `SELFGRAPH_OBJECTTYPE_MATCH=relaxed` (AFTER)  |
+| `corpus.relaxed.jsonl`    | `3277086cf459e945` | `SELFGRAPH_OBJECTTYPE_MATCH=relaxed` (AFTER)  |
 | `adversarial.jsonl`       | `09b408bd369dc89d` | (relaxed; flag doesn't affect this run)  |
 | `rollback.jsonl`          | `4e6333398e82e127` | (relaxed; flag doesn't affect this run)  |
 
@@ -25,6 +25,14 @@ Multiple consecutive cold runs on the reference machine produce
 identical shas. If the script reports `MISMATCH` on yours, capture
 the diff and file an issue — that's a reproducibility regression and
 we want to know about it.
+
+The `corpus.relaxed.jsonl` sha was updated from `74bd52ff901bc1bc` to
+`3277086cf459e945` when the per-change projection was enriched to
+include the `behavior` / `on_event_type` / `scope_object_type` /
+`behavior_source_file` fields on `bind_behavior` entries (the worked-
+example payload for the paper). No measured number changed — only
+the projection is wider. The `corpus.literal.jsonl` sha is unaffected
+because that condition contains no `bind_behavior` changes.
 
 ## Environment
 

@@ -24,7 +24,7 @@
   },
   "false_positive_check": {
     "baseline_jsonl_present": true,
-    "baseline_jsonl_sha256_16": "74bd52ff901bc1bc",
+    "baseline_jsonl_sha256_16": "3277086cf459e945",
     "n_benign_rows": 72,
     "n_false_positives": 0,
     "false_positive_labels": []

@@ -175,7 +175,21 @@ def run_goal(graph: Graph, runtime: Runtime, goal_row: dict[str, Any]
     for i, c in enumerate(changes):
         cat = classify_change(graph, c)
         origin_counts[cat] = origin_counts.get(cat, 0) + 1
-        per_change.append({"i": i, "kind": c.get("kind"), "category": cat})
+        entry: dict[str, Any] = {"i": i, "kind": c.get("kind"),
+                                 "category": cat}
+        if c.get("kind") == "bind_behavior":
+            beh_name = c.get("behavior")
+            entry["behavior"] = beh_name
+            entry["on_event_type"] = c.get("on_event_type")
+            entry["scope_object_type"] = c.get("scope_object_type")
+            beh_src: str | None = None
+            for b in graph.objects(type="Behavior"):
+                if b.data.get("name") == beh_name:
+                    beh_src = (b.data.get("source_file_path")
+                               or b.data.get("source_file"))
+                    break
+            entry["behavior_source_file"] = beh_src
+        per_change.append(entry)
     out["origin_counts"] = origin_counts
     out["per_change"] = per_change
 
