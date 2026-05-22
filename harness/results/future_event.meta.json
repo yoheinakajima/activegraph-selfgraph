@@ -1,0 +1,13 @@
+{
+  "all_control_did_not_fire": true,
+  "all_treatment_fired": true,
+  "binding_executor_notes": "The harness scans the post-promotion graph for BehaviorBinding objects whose `behavior` resolves to a diligence pack behavior, and loads the diligence pack into the test runtime iff at least one such binding is found. selfgraph's sandbox_apply only materializes the BehaviorBinding object; the registration with the runtime registry is performed by this harness. Without promotion, no BehaviorBinding exists, so the harness does not load the pack and the bound behavior has nothing to fire against.",
+  "diligence_pack_name": "diligence",
+  "diligence_pack_version": "0.1.0",
+  "fixture_company": "Northwind Robotics",
+  "jsonl_path": "harness/results/future_event.jsonl",
+  "jsonl_sha256_16": "8418183932468a18",
+  "llm_augment_active": false,
+  "n_trials": 3,
+  "objecttype_match_mode": "relaxed"
+}

@@ -20,6 +20,8 @@ and asserts the regenerated files match these recorded shas:
 | `corpus.relaxed.jsonl`    | `3277086cf459e945` | `SELFGRAPH_OBJECTTYPE_MATCH=relaxed` (AFTER)  |
 | `adversarial.jsonl`       | `09b408bd369dc89d` | (relaxed; flag doesn't affect this run)  |
 | `rollback.jsonl`          | `4e6333398e82e127` | (relaxed; flag doesn't affect this run)  |
+| `future_event.jsonl`      | `8418183932468a18` | (relaxed; one row per bind_behavior trial) |
+| `extractor_recall.json`   | `82a971df7a9ad03c` | (script runs literal AND relaxed inside) |
 
 Multiple consecutive cold runs on the reference machine produce
 identical shas. If the script reports `MISMATCH` on yours, capture
@@ -81,7 +83,9 @@ grep -nE 'anthropic|Anthropic|messages\.create|claude|llm_provider|LLMProvider' 
 | `harness/results/corpus.literal.jsonl`     | 45 mechanical goals (BEFORE) × propose → validate → sandbox(promote=False)               |
 | `harness/results/corpus.relaxed.jsonl`     | 72 mechanical goals (AFTER) × propose → validate → sandbox(promote=False)                |
 | `harness/results/adversarial.jsonl`        | 28 mechanical adversarial attempts, one row per attempt, with caught/expected            |
-| `harness/results/rollback.jsonl`           | 5 promote=True runs with byte-identical replay-to-before-promote                         |
+| `harness/results/rollback.jsonl`           | 72 promote=True runs (every guardrail-validated relaxed corpus proposal incl. all 9 bindings) with byte-identical replay-to-before-promote |
+| `harness/results/future_event.jsonl`       | 3 bind_behavior trials (one per bound diligence behavior); treatment vs control firing   |
+| `harness/results/extractor_recall.json`    | per-mode recall of the existing extractor over the activegraph runtime, AST denominator  |
 | `harness/results/*.meta.json`              | per-run aggregate (counts, llm-active flag, objecttype-match-mode, jsonl sha)            |
 
 The aggregate tables are produced by:
@@ -156,6 +160,101 @@ variable guarantee — only the extractor rule moves — is what makes
 the runtime-derived 18/27 finding a causal result, not a confound.
 If that invariant fails on your machine `reproduce.sh` exits non-zero
 with a `MISMATCH` line.
+
+## Rollback precondition (`rollback.jsonl`)
+
+`harness/rollback_precondition.py` runs every guardrail-validated
+proposal from the relaxed corpus pipeline through a promote +
+replay-to-before-promote check. The selection rule is mechanical:
+
+* Reproduce the corpus.relaxed pipeline (same ingest, same extract,
+  same `generate_goal_set` import from `harness.run_corpus`).
+* Call `propose_patch_for + validate_proposal` on every goal in
+  order; every proposal whose guardrail validation passes becomes a
+  rollback trial. On the reference machine this yields **n = 72**
+  promotions — every relaxed-corpus proposal, including all 9
+  bind_behavior proposals (PatchProposal#578 / #579 / #580 /
+  #587 / #588 / #589 / #596 / #597 / #598). No cherry-picking.
+
+Each promotion runs in a `Runtime.fork` taken at the moment of the
+proposal's validation; the fork shares the SQLite file with the main
+pipeline graph but operates under a distinct run_id, so the wider
+sample neither contaminates other trials nor mutates the main
+pipeline (the corpus.literal / corpus.relaxed shas are unaffected by
+this run, which `reproduce.sh` verifies on every cold run).
+
+Per trial we record:
+
+* `n_promote_events == n_changes + 1` (one event per change plus the
+  proposal status patch — the strict expectation; some add_relation
+  changes legitimately drop when their endpoint names don't resolve)
+* `all_changes_logged`: did promote produce enough actor=`promote`
+  events to account for every allowed-kind change
+* `replay_byte_identical`: opening a fresh `SQLiteEventStore` for the
+  fork's run_id and replaying its events into an empty Graph,
+  stopping just before the first promote-actor event, reconstructs
+  a snapshot byte-identical to the pre-promote snapshot (objects,
+  relations, AND the full event log)
+
+The committed result table (reference machine):
+
+| metric                                    | overall (n=72) | bind_behavior subset (n=9) |
+| ----------------------------------------- | -------------- | -------------------------- |
+| `all_changes_logged`                      | 72/72 (100%)   | 9/9 (100%)                 |
+| `replay_byte_identical`                   | 72/72 (100%)   | 9/9 (100%)                 |
+
+## Future-event mechanism test (`future_event.jsonl`)
+
+`harness/run_future_event.py` covers the three diligence-pack
+behaviors selfgraph's proposer bound in the relaxed corpus
+(`company_planner`, `evidence_linker`, `question_generator`,
+referenced as PatchProposal#578 / #587 / #596). Per trial:
+
+* **TREATMENT** materializes the proposal via the same
+  `ingest → extract → propose → validate → sandbox_apply(promote=True)`
+  path the corpus uses. After promotion, the live graph contains a
+  `BehaviorBinding` object naming the bound runtime behavior. The
+  harness, acting as the *binding executor*, inspects those objects
+  and loads the diligence pack into a fresh SQLite-backed test
+  runtime. A matching event is emitted; the test runtime's event log
+  is scanned for `behavior.started` against the bound behavior name.
+* **CONTROL** runs the same pipeline but skips `sandbox_apply` — no
+  `BehaviorBinding` is materialized, the binding executor does not
+  load the pack, the bound behavior is not registered, and emitting
+  the same event leaves the test log empty of that behavior's
+  activation.
+
+`question_generator` is `@llm_behavior`; the harness attaches the
+diligence pack's `RecordedDiligenceProvider` (fixture-backed,
+offline) so the test stays inside the LLM-free invariant.
+
+The current `sandbox_apply` writes the `BehaviorBinding` object but
+does not itself register behaviors with the activegraph runtime
+registry. The harness performs that last step — the script's module
+docstring and the row's `binding_executor_notes` are explicit about
+this so the result isn't read as more than it is.
+
+## Extractor discovery recall (`extractor_recall.json`)
+
+`harness/extractor_recall.py` quantifies the §7 extraction-fidelity
+bottleneck. The denominator for each node type is counted with
+`ast.walk` over the installed activegraph package source:
+
+* **Behavior**: every function with a `@behavior` /
+  `@llm_behavior` / `@relation_behavior` decorator (top-level name
+  or attribute tail, with or without a call).
+* **ObjectType**: union of `add_object("<X>", ...)` first-positional
+  string literals and `ObjectType(name="<X>", ...)` keyword string
+  literals.
+
+The numerator is the runtime-derived subset of the corresponding
+node type the existing extractor (`selfgraph/extract.py`) produces
+when fed the same `ingest_paths + ingest_module_docs` setup
+`run_corpus.py` uses. The script runs the extractor twice — once
+with `SELFGRAPH_OBJECTTYPE_MATCH=literal`, once with `=relaxed` —
+and reports recall, missed names, and any runtime-derived
+false-positive (e.g. `hello` from a code-template literal in
+`activegraph/packs/scaffold.py`). The extractor is not modified.
 
 ## PatchProposal lifecycle, recapped
 
