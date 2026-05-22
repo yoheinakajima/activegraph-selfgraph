@@ -1,0 +1,8 @@
+# Pinned for paper-reproducibility — see REPRODUCE.md.
+# Python 3.11+ required.
+activegraph==1.0.5.post2
+
+# Optional: only needed if you want LLM-augmented extraction (the
+# measured paper results do NOT use this; the harness refuses to run
+# while ANTHROPIC_API_KEY is set unless SELFGRAPH_HARNESS_ALLOW_LLM=1).
+# anthropic>=0.40
