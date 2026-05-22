@@ -99,8 +99,14 @@ def ingest_paths(
         else:
             files = []
             for dirpath, dirnames, filenames in os.walk(root_p):
-                dirnames[:] = [d for d in dirnames if d not in skip]
-                for fn in filenames:
+                # Sort filesystem walk so ingestion order is stable
+                # across machines (os.walk yields entries in
+                # filesystem-dependent order otherwise). This is a
+                # determinism fix, not a behavior change: the same
+                # files are ingested either way; only the sequence is
+                # canonical now.
+                dirnames[:] = sorted(d for d in dirnames if d not in skip)
+                for fn in sorted(filenames):
                     files.append(Path(dirpath) / fn)
         for fp in files:
             if fp.suffix.lower() not in exts:
@@ -132,7 +138,14 @@ def ingest_module_docs(
     pkg = importlib.import_module(module_name)
     targets = [(module_name, pkg)]
     if hasattr(pkg, "__path__"):
-        for info in pkgutil.walk_packages(pkg.__path__, prefix=pkg.__name__ + "."):
+        # Sort the package walk so synthetic-file ingestion order
+        # is stable across machines (pkgutil.walk_packages yields
+        # entries in filesystem order otherwise).
+        walked = sorted(
+            pkgutil.walk_packages(pkg.__path__, prefix=pkg.__name__ + "."),
+            key=lambda info: info.name,
+        )
+        for info in walked:
             if len(targets) >= max_submodules:
                 break
             # Skip script-style entry points (e.g. activegraph/__main__.py

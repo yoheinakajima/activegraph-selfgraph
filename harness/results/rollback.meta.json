@@ -1,0 +1,9 @@
+{
+  "n_promotions": 5,
+  "n_all_changes_logged": 5,
+  "n_replay_byte_identical": 5,
+  "db_path": ".selfgraph-rollback/graph.db",
+  "jsonl_path": "harness/results/rollback.jsonl",
+  "jsonl_sha256_16": "4e6333398e82e127",
+  "llm_augment_active": false
+}

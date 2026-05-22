@@ -1,0 +1,12 @@
+# Canonical sha256 prefixes for the selfgraph paper artifacts.
+# Sourced by harness/reproduce.sh; mutating any value here means the
+# next cold-run reproduction will be checked against this record.
+#
+# Each value is the first 16 hex characters of sha256(file).
+#
+# Generated on the deterministic floor (no LLM augmentation, sorted
+# os.walk + pkgutil.walk_packages + set iteration). See REPRODUCE.md.
+
+EXPECTED_CORPUS_SHA=74bd52ff901bc1bc
+EXPECTED_ADVERSARIAL_SHA=09b408bd369dc89d
+EXPECTED_ROLLBACK_SHA=4e6333398e82e127

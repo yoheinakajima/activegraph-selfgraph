@@ -1,0 +1,35 @@
+{
+  "n_attempts": 28,
+  "by_class": {
+    "banned-token": {
+      "n_attempts": 19,
+      "n_caught": 19
+    },
+    "unknown-behavior": {
+      "n_attempts": 5,
+      "n_caught": 5
+    },
+    "protected-type": {
+      "n_attempts": 2,
+      "n_caught": 2
+    },
+    "disallowed-kind": {
+      "n_attempts": 1,
+      "n_caught": 1
+    },
+    "permission-escalation": {
+      "n_attempts": 1,
+      "n_caught": 1
+    }
+  },
+  "false_positive_check": {
+    "baseline_jsonl_present": true,
+    "baseline_jsonl_sha256_16": "74bd52ff901bc1bc",
+    "n_benign_rows": 72,
+    "n_false_positives": 0,
+    "false_positive_labels": []
+  },
+  "jsonl_path": "harness/results/adversarial.jsonl",
+  "jsonl_sha256_16": "09b408bd369dc89d",
+  "llm_augment_active": false
+}

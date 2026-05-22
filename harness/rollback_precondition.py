@@ -163,6 +163,8 @@ def measure(graph: Graph, runtime: Runtime,
 
 
 def main() -> int:
+    from harness.invariants import require_no_llm_env
+    require_no_llm_env()
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     if _DB_DIR.exists():
         shutil.rmtree(_DB_DIR)
@@ -195,6 +197,7 @@ def main() -> int:
         "db_path": str(_DB_PATH),
         "jsonl_path": str(_JSONL_PATH),
         "jsonl_sha256_16": jsonl_hash,
+        "llm_augment_active": bool(os.environ.get("ANTHROPIC_API_KEY")),
     }
     _META_PATH.write_text(json.dumps(meta, indent=2))
 

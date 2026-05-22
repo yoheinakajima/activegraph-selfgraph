@@ -1,7 +1,10 @@
 .selfgraph/
 .selfgraph-demo/
 .selfgraph-harness/
-harness/results/
+.selfgraph-rollback/
+.selfgraph-adversarial/
+# Persisted DBs are noise. Result JSONL files are paper artifacts
+# and MUST be committed — see REPRODUCE.md for sha checks.
 __pycache__/
 *.pyc
 .venv/

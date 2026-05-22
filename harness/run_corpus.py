@@ -151,7 +151,6 @@ def run_goal(graph: Graph, runtime: Runtime, goal_row: dict[str, Any]
     the validate-emitted patch on it, never by sandbox application.
     """
     out: dict[str, Any] = dict(goal_row)
-    out["t_start"] = time.time()
 
     # propose + validate happen on the LIVE graph (they emit events).
     # That's expected: a PatchProposal is itself an Object in the log.
@@ -239,7 +238,6 @@ def run_goal(graph: Graph, runtime: Runtime, goal_row: dict[str, Any]
             and live_events_before == live_events_after
         ),
     }
-    out["t_end"] = time.time()
     return out
 
 
@@ -247,6 +245,8 @@ def run_goal(graph: Graph, runtime: Runtime, goal_row: dict[str, Any]
 
 
 def main(argv: list[str] | None = None) -> int:
+    from harness.invariants import require_no_llm_env
+    require_no_llm_env()
     argv = list(sys.argv[1:] if argv is None else argv)
     # Optional positional arg: alternate jsonl output path (e.g. for
     # the extractor-relaxation A/B). The meta file follows the same
@@ -308,6 +308,10 @@ def main(argv: list[str] | None = None) -> int:
         "jsonl_sha256_16": jsonl_hash,
         "fork_violations": fork_violations,
         "isolation_violations": isolation_violations,
+        # Audit invariant for the paper: this run was on the
+        # deterministic floor (no LLM augmentation). False here means
+        # the canonical shas apply.
+        "llm_augment_active": bool(os.environ.get("ANTHROPIC_API_KEY")),
     }
     meta_path.write_text(json.dumps(meta, indent=2))
 

@@ -244,6 +244,8 @@ def _false_positives() -> dict[str, Any]:
 
 
 def main() -> int:
+    from harness.invariants import require_no_llm_env
+    require_no_llm_env()
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     graph, _ = _build_graph()
 
@@ -276,6 +278,7 @@ def main() -> int:
         "false_positive_check": fp,
         "jsonl_path": str(_JSONL_PATH),
         "jsonl_sha256_16": jsonl_hash,
+        "llm_augment_active": bool(os.environ.get("ANTHROPIC_API_KEY")),
     }
     _META_PATH.write_text(json.dumps(meta, indent=2))
 

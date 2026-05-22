@@ -246,7 +246,11 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
     # lowercase names the original literal-string pass misses.
     typenames = set(_RE_OBJTYPE_HINT.findall(text))
     typenames |= set(_RE_OBJTYPE_CONSTRUCTOR.findall(text))
-    for typename in typenames:
+    # Iterate sorted so insertion order — and therefore generated
+    # ObjectType IDs — are stable across Python invocations
+    # (set iteration order depends on PYTHONHASHSEED). Pure
+    # determinism fix; same names get added either way.
+    for typename in sorted(typenames):
         t = _add_unique(graph, "ObjectType", {"name": typename, **src})
         if t:
             delta["ObjectType"] += 1
