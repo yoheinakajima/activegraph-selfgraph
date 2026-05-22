@@ -30,6 +30,8 @@ EXPECTED_CORPUS_LITERAL_SHA=""
 EXPECTED_CORPUS_RELAXED_SHA=""
 EXPECTED_ADVERSARIAL_SHA=""
 EXPECTED_ROLLBACK_SHA=""
+EXPECTED_FUTURE_EVENT_SHA=""
+EXPECTED_EXTRACTOR_RECALL_SHA=""
 if [[ -f harness/results/CANONICAL_SHAS.txt ]]; then
   # shellcheck disable=SC1091
   source harness/results/CANONICAL_SHAS.txt
@@ -38,7 +40,9 @@ fi
 echo "[reproduce] wiping persisted DB state and previous result files"
 rm -rf .selfgraph .selfgraph-demo .selfgraph-harness \
        .selfgraph-rollback .selfgraph-adversarial \
+       .selfgraph-future-event \
        harness/results/*.jsonl harness/results/*.meta.json \
+       harness/results/extractor_recall.json \
        2>/dev/null || true
 mkdir -p harness/results
 
@@ -65,10 +69,21 @@ SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
 echo "    → harness/results/adversarial.jsonl"
 
 echo
-echo "[reproduce] (4/4) rollback precondition (MATCH=relaxed)"
+echo "[reproduce] (4/6) rollback precondition (MATCH=relaxed)"
 SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
   python -m harness.rollback_precondition > /tmp/selfgraph-rb.log 2>&1
 echo "    → harness/results/rollback.jsonl"
+
+echo
+echo "[reproduce] (5/6) future-event mechanism test (MATCH=relaxed)"
+SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
+  python -m harness.run_future_event > /tmp/selfgraph-fe.log 2>&1
+echo "    → harness/results/future_event.jsonl"
+
+echo
+echo "[reproduce] (6/6) extractor discovery recall (MATCH read inside script)"
+python -m harness.extractor_recall > /tmp/selfgraph-recall.log 2>&1
+echo "    → harness/results/extractor_recall.json"
 
 echo
 echo "============================================================"
@@ -107,6 +122,8 @@ check "corpus.literal.jsonl"  harness/results/corpus.literal.jsonl  "$EXPECTED_C
 check "corpus.relaxed.jsonl"  harness/results/corpus.relaxed.jsonl  "$EXPECTED_CORPUS_RELAXED_SHA"
 check "adversarial.jsonl"     harness/results/adversarial.jsonl     "$EXPECTED_ADVERSARIAL_SHA"
 check "rollback.jsonl"        harness/results/rollback.jsonl        "$EXPECTED_ROLLBACK_SHA"
+check "future_event.jsonl"    harness/results/future_event.jsonl    "$EXPECTED_FUTURE_EVENT_SHA"
+check "extractor_recall.json" harness/results/extractor_recall.json "$EXPECTED_EXTRACTOR_RECALL_SHA"
 
 echo
 echo "  ok=$ok  fail=$fail"

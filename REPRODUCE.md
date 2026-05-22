@@ -20,6 +20,8 @@ and asserts the regenerated files match these recorded shas:
 | `corpus.relaxed.jsonl`    | `3277086cf459e945` | `SELFGRAPH_OBJECTTYPE_MATCH=relaxed` (AFTER)  |
 | `adversarial.jsonl`       | `09b408bd369dc89d` | (relaxed; flag doesn't affect this run)  |
 | `rollback.jsonl`          | `4e6333398e82e127` | (relaxed; flag doesn't affect this run)  |
+| `future_event.jsonl`      | `8418183932468a18` | (relaxed; one row per bind_behavior trial) |
+| `extractor_recall.json`   | `82a971df7a9ad03c` | (script runs literal AND relaxed inside) |
 
 Multiple consecutive cold runs on the reference machine produce
 identical shas. If the script reports `MISMATCH` on yours, capture
@@ -82,6 +84,8 @@ grep -nE 'anthropic|Anthropic|messages\.create|claude|llm_provider|LLMProvider' 
 | `harness/results/corpus.relaxed.jsonl`     | 72 mechanical goals (AFTER) × propose → validate → sandbox(promote=False)                |
 | `harness/results/adversarial.jsonl`        | 28 mechanical adversarial attempts, one row per attempt, with caught/expected            |
 | `harness/results/rollback.jsonl`           | 5 promote=True runs with byte-identical replay-to-before-promote                         |
+| `harness/results/future_event.jsonl`       | 3 bind_behavior trials (one per bound diligence behavior); treatment vs control firing   |
+| `harness/results/extractor_recall.json`    | per-mode recall of the existing extractor over the activegraph runtime, AST denominator  |
 | `harness/results/*.meta.json`              | per-run aggregate (counts, llm-active flag, objecttype-match-mode, jsonl sha)            |
 
 The aggregate tables are produced by:
@@ -156,6 +160,59 @@ variable guarantee — only the extractor rule moves — is what makes
 the runtime-derived 18/27 finding a causal result, not a confound.
 If that invariant fails on your machine `reproduce.sh` exits non-zero
 with a `MISMATCH` line.
+
+## Future-event mechanism test (`future_event.jsonl`)
+
+`harness/run_future_event.py` covers the three diligence-pack
+behaviors selfgraph's proposer bound in the relaxed corpus
+(`company_planner`, `evidence_linker`, `question_generator`,
+referenced as PatchProposal#578 / #587 / #596). Per trial:
+
+* **TREATMENT** materializes the proposal via the same
+  `ingest → extract → propose → validate → sandbox_apply(promote=True)`
+  path the corpus uses. After promotion, the live graph contains a
+  `BehaviorBinding` object naming the bound runtime behavior. The
+  harness, acting as the *binding executor*, inspects those objects
+  and loads the diligence pack into a fresh SQLite-backed test
+  runtime. A matching event is emitted; the test runtime's event log
+  is scanned for `behavior.started` against the bound behavior name.
+* **CONTROL** runs the same pipeline but skips `sandbox_apply` — no
+  `BehaviorBinding` is materialized, the binding executor does not
+  load the pack, the bound behavior is not registered, and emitting
+  the same event leaves the test log empty of that behavior's
+  activation.
+
+`question_generator` is `@llm_behavior`; the harness attaches the
+diligence pack's `RecordedDiligenceProvider` (fixture-backed,
+offline) so the test stays inside the LLM-free invariant.
+
+The current `sandbox_apply` writes the `BehaviorBinding` object but
+does not itself register behaviors with the activegraph runtime
+registry. The harness performs that last step — the script's module
+docstring and the row's `binding_executor_notes` are explicit about
+this so the result isn't read as more than it is.
+
+## Extractor discovery recall (`extractor_recall.json`)
+
+`harness/extractor_recall.py` quantifies the §7 extraction-fidelity
+bottleneck. The denominator for each node type is counted with
+`ast.walk` over the installed activegraph package source:
+
+* **Behavior**: every function with a `@behavior` /
+  `@llm_behavior` / `@relation_behavior` decorator (top-level name
+  or attribute tail, with or without a call).
+* **ObjectType**: union of `add_object("<X>", ...)` first-positional
+  string literals and `ObjectType(name="<X>", ...)` keyword string
+  literals.
+
+The numerator is the runtime-derived subset of the corresponding
+node type the existing extractor (`selfgraph/extract.py`) produces
+when fed the same `ingest_paths + ingest_module_docs` setup
+`run_corpus.py` uses. The script runs the extractor twice — once
+with `SELFGRAPH_OBJECTTYPE_MATCH=literal`, once with `=relaxed` —
+and reports recall, missed names, and any runtime-derived
+false-positive (e.g. `hello` from a code-template literal in
+`activegraph/packs/scaffold.py`). The extractor is not modified.
 
 ## PatchProposal lifecycle, recapped
 

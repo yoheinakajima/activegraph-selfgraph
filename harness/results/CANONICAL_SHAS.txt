@@ -16,3 +16,17 @@ EXPECTED_CORPUS_LITERAL_SHA=57a86e94ba5e211d
 EXPECTED_CORPUS_RELAXED_SHA=3277086cf459e945
 EXPECTED_ADVERSARIAL_SHA=09b408bd369dc89d
 EXPECTED_ROLLBACK_SHA=4e6333398e82e127
+
+# future_event — the bind_behavior binding is causally LIVE under
+# promotion and not under control. See harness/run_future_event.py
+# for the binding-executor design note. Three trials, one per
+# diligence-pack behavior selfgraph's proposer bound in the relaxed
+# corpus run.
+EXPECTED_FUTURE_EVENT_SHA=8418183932468a18
+
+# extractor_recall — denominator counted by ast.walk over the
+# installed activegraph package; numerator is the runtime-derived
+# subset of nodes the existing extractor produces under each
+# SELFGRAPH_OBJECTTYPE_MATCH mode. Measurement only — the extractor
+# is not modified.
+EXPECTED_EXTRACTOR_RECALL_SHA=82a971df7a9ad03c

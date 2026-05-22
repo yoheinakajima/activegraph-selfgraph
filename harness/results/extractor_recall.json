@@ -1,0 +1,250 @@
+{
+  "ground_truth": {
+    "Behavior": {
+      "count": 7,
+      "decorations": [
+        {
+          "decorator": "behavior",
+          "function_name": "company_planner",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "behavior",
+          "function_name": "contradiction_detector",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "llm_behavior",
+          "function_name": "document_researcher",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "behavior",
+          "function_name": "evidence_linker",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "llm_behavior",
+          "function_name": "memo_synthesizer",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "llm_behavior",
+          "function_name": "question_generator",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "decorator": "llm_behavior",
+          "function_name": "risk_identifier",
+          "source_file": "packs/diligence/behaviors.py"
+        }
+      ],
+      "unique_names": [
+        "company_planner",
+        "contradiction_detector",
+        "document_researcher",
+        "evidence_linker",
+        "memo_synthesizer",
+        "question_generator",
+        "risk_identifier"
+      ]
+    },
+    "ObjectType": {
+      "add_object_literal": [
+        {
+          "name": "claim",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "company",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "contradiction",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "document",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "evidence",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "memo",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "question",
+          "source_file": "packs/diligence/behaviors.py"
+        },
+        {
+          "name": "risk",
+          "source_file": "packs/diligence/behaviors.py"
+        }
+      ],
+      "count": 8,
+      "objecttype_constructor": [
+        {
+          "name": "claim",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "company",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "contradiction",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "document",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "evidence",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "memo",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "question",
+          "source_file": "packs/diligence/object_types.py"
+        },
+        {
+          "name": "risk",
+          "source_file": "packs/diligence/object_types.py"
+        }
+      ],
+      "unique_names": [
+        "claim",
+        "company",
+        "contradiction",
+        "document",
+        "evidence",
+        "memo",
+        "question",
+        "risk"
+      ]
+    }
+  },
+  "ground_truth_counting_method": {
+    "behaviors": "ast.walk over every .py in the installed activegraph package; a function counts if any of its decorators has callable-name 'behavior', 'llm_behavior', or 'relation_behavior' (top-level name or attribute tail, with or without a call). Walk order is sorted directory/file.",
+    "object_types": "ast.walk over every .py in the installed activegraph package. Two conventions counted separately and then unioned for the denominator: (1) add_object(\"<X>\", ...) where the first positional arg is a string literal; (2) ObjectType(name=\"<X>\", ...) where the name kwarg is a string literal."
+  },
+  "llm_augment_active": false,
+  "notes": [
+    "The SELFGRAPH_OBJECTTYPE_MATCH flag gates only the ObjectType regex set; Behavior recall is identical under literal and relaxed modes.",
+    "Runtime-derived = the extracted node's source_file_path starts with the installed activegraph package directory OR with the 'module://activegraph' synthetic prefix used by ingest_module_docs. Same definition as the corpus harness uses for the path_class field.",
+    "false_positive_runtime_derived lists extracted runtime-derived names that have no matching @behavior / ObjectType declaration in the AST walk \u2014 these are real extractor over-matches (typically a decorator string embedded in a code-template literal, e.g. scaffold.py).",
+    "llm_augment_active=false: the harness invariant refuses to run with ANTHROPIC_API_KEY set. Same as every other harness result."
+  ],
+  "package_root": "/usr/local/lib/python3.11/dist-packages/activegraph",
+  "results": {
+    "literal_mode": {
+      "Behavior": {
+        "denominator": 7,
+        "discovered_runtime_derived": [
+          "company_planner",
+          "evidence_linker",
+          "hello",
+          "question_generator"
+        ],
+        "false_positive_runtime_derived": [
+          "hello"
+        ],
+        "missed": [
+          "contradiction_detector",
+          "document_researcher",
+          "memo_synthesizer",
+          "risk_identifier"
+        ],
+        "numerator_true_positive": 3,
+        "recall": 0.42857142857142855,
+        "true_positive": [
+          "company_planner",
+          "evidence_linker",
+          "question_generator"
+        ]
+      },
+      "ObjectType": {
+        "denominator": 8,
+        "discovered_runtime_derived": [],
+        "false_positive_runtime_derived": [],
+        "missed": [
+          "claim",
+          "company",
+          "contradiction",
+          "document",
+          "evidence",
+          "memo",
+          "question",
+          "risk"
+        ],
+        "numerator_true_positive": 0,
+        "recall": 0.0,
+        "true_positive": []
+      }
+    },
+    "relaxed_mode": {
+      "Behavior": {
+        "denominator": 7,
+        "discovered_runtime_derived": [
+          "company_planner",
+          "evidence_linker",
+          "hello",
+          "question_generator"
+        ],
+        "false_positive_runtime_derived": [
+          "hello"
+        ],
+        "missed": [
+          "contradiction_detector",
+          "document_researcher",
+          "memo_synthesizer",
+          "risk_identifier"
+        ],
+        "numerator_true_positive": 3,
+        "recall": 0.42857142857142855,
+        "true_positive": [
+          "company_planner",
+          "evidence_linker",
+          "question_generator"
+        ]
+      },
+      "ObjectType": {
+        "denominator": 8,
+        "discovered_runtime_derived": [
+          "claim",
+          "company",
+          "contradiction",
+          "document",
+          "evidence",
+          "item",
+          "memo",
+          "question",
+          "risk"
+        ],
+        "false_positive_runtime_derived": [
+          "item"
+        ],
+        "missed": [],
+        "numerator_true_positive": 8,
+        "recall": 1.0,
+        "true_positive": [
+          "claim",
+          "company",
+          "contradiction",
+          "document",
+          "evidence",
+          "memo",
+          "question",
+          "risk"
+        ]
+      }
+    }
+  }
+}
