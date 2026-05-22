@@ -49,6 +49,19 @@ _RE_MUST = re.compile(
 _RE_OBJTYPE_HINT = re.compile(
     r"(?:object[_\s]?type|ObjectType\(name=|add_object\(\s*[\"'])([A-Z][A-Za-z0-9_]+)"
 )
+# Relaxed ObjectType match: ``ObjectType(name="<name>")`` /
+# ``ObjectType(name='<name>')`` constructor calls with whitespace
+# tolerance and ANY case for ``<name>``. This is the convention the
+# activegraph runtime uses for its pack ObjectTypes (lowercase names
+# like ``"company"`` / ``"document"``); the original
+# ``_RE_OBJTYPE_HINT`` only catches capitalized identifiers and so
+# misses those. Both regexes run against every chunk and their
+# captures are unioned in ``_scan_chunk``. Nothing downstream
+# (``propose.py``, ``classify_change``) is changed — only what gets
+# extracted.
+_RE_OBJTYPE_CONSTRUCTOR = re.compile(
+    r"ObjectType\(\s*name\s*=\s*[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']"
+)
 
 # Heuristic seed capabilities — the agent will still ground them in
 # extracted API/Behavior nodes, but we name them up front so the graph
@@ -227,8 +240,13 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
                         graph.add_relation(cap_id, api.id, rel, actor="extract")
                         break
 
-    # Object types referenced via add_object("Type", ...) or similar
-    for typename in set(_RE_OBJTYPE_HINT.findall(text)):
+    # Object types referenced via add_object("Type", ...) or via
+    # ObjectType(name="...") constructor calls. Union of both regex
+    # passes; the constructor pass picks up activegraph-runtime
+    # lowercase names the original literal-string pass misses.
+    typenames = set(_RE_OBJTYPE_HINT.findall(text))
+    typenames |= set(_RE_OBJTYPE_CONSTRUCTOR.findall(text))
+    for typename in typenames:
         t = _add_unique(graph, "ObjectType", {"name": typename, **src})
         if t:
             delta["ObjectType"] += 1

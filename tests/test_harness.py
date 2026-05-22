@@ -108,6 +108,36 @@ def test_classify_change_matches_citation_taxonomy():
         )
 
 
+def test_relaxed_extractor_catches_runtime_object_types():
+    """After the ObjectType regex relaxation, extractor must emit at
+    least one ObjectType node whose source_file_path lives inside the
+    installed activegraph package (the activegraph runtime uses
+    lowercase ``ObjectType(name="...")`` constructor calls that the
+    pre-relaxation regex missed)."""
+    import os
+    import activegraph as ag
+    from selfgraph.ingest import ingest_paths
+    pkg = os.path.dirname(ag.__file__)
+    g = Graph(ids=IDGen(), run_id="relaxed")
+    ingest_paths(g, [os.path.join(pkg, "packs")], max_bytes=400_000)
+    extract_capabilities(g, use_llm=False)
+    runtime_ots = [
+        o for o in g.objects(type="ObjectType")
+        if (o.data.get("source_file_path") or "").startswith(pkg)
+    ]
+    assert runtime_ots, (
+        "expected the relaxed extractor to emit at least one "
+        "ObjectType from an activegraph package path; got none"
+    )
+    # The diligence pack contains lowercase ObjectType(name=...) calls
+    # — at least 'company' should be there.
+    names = {o.data.get("name") for o in runtime_ots}
+    assert "company" in names, (
+        f"expected 'company' among runtime-derived ObjectType names; "
+        f"got {sorted(names)}"
+    )
+
+
 def test_run_goal_emits_expected_row_shape(tmp_path):
     """End-to-end on a single goal: row must include the spec'd keys
     and the sandbox isolation invariant must hold."""

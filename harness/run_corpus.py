@@ -55,8 +55,8 @@ from selfgraph.sandbox import sandbox_apply
 
 
 _RESULTS_DIR = Path("harness/results")
-_JSONL_PATH = _RESULTS_DIR / "corpus.jsonl"
-_META_PATH = _RESULTS_DIR / "run.meta.json"
+_DEFAULTjsonl_path = _RESULTS_DIR / "corpus.jsonl"
+_DEFAULTmeta_path = _RESULTS_DIR / "run.meta.json"
 _DB_DIR = Path(".selfgraph-harness")
 _DB_PATH = _DB_DIR / "graph.db"
 
@@ -246,7 +246,17 @@ def run_goal(graph: Graph, runtime: Runtime, goal_row: dict[str, Any]
 # ---------- entry point ----------
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Optional positional arg: alternate jsonl output path (e.g. for
+    # the extractor-relaxation A/B). The meta file follows the same
+    # stem.
+    if argv:
+        jsonl_path = Path(argv[0])
+        meta_path = jsonl_path.with_suffix(".meta.json")
+    else:
+        jsonl_path = _DEFAULTjsonl_path
+        meta_path = _DEFAULTmeta_path
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     graph, runtime = build_graph()
@@ -263,7 +273,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     fork_violations: list[dict[str, Any]] = []
     isolation_violations: list[dict[str, Any]] = []
-    with _JSONL_PATH.open("w") as f:
+    with jsonl_path.open("w") as f:
         for i, gr in enumerate(goal_set):
             print(f"[harness] {i + 1}/{len(goal_set)}  {gr['goal']!r}")
             row = run_goal(graph, runtime, gr)
@@ -287,19 +297,19 @@ def main() -> int:
                 })
 
     # Meta + content hash.
-    jsonl_hash = hashlib.sha256(_JSONL_PATH.read_bytes()).hexdigest()[:16]
+    jsonl_hash = hashlib.sha256(jsonl_path.read_bytes()).hexdigest()[:16]
     meta = {
         "n_goals": len(goal_set),
         "runtime_derived": runtime_count,
         "selfgraph_derived": selfgraph_count,
         "templates": list(_TEMPLATES),
         "db_path": str(_DB_PATH),
-        "jsonl_path": str(_JSONL_PATH),
+        "jsonl_path": str(jsonl_path),
         "jsonl_sha256_16": jsonl_hash,
         "fork_violations": fork_violations,
         "isolation_violations": isolation_violations,
     }
-    _META_PATH.write_text(json.dumps(meta, indent=2))
+    meta_path.write_text(json.dumps(meta, indent=2))
 
     if fork_violations:
         print("\n[harness] FAIL — SQLite-fork-for-every-row requirement "
@@ -317,8 +327,8 @@ def main() -> int:
                   f"after={v['after']}", file=sys.stderr)
         return 3
 
-    print(f"\n[harness] wrote {len(rows)} rows → {_JSONL_PATH}")
-    print(f"[harness] meta → {_META_PATH}  (sha256[:16]={jsonl_hash})")
+    print(f"\n[harness] wrote {len(rows)} rows → {jsonl_path}")
+    print(f"[harness] meta → {meta_path}  (sha256[:16]={jsonl_hash})")
     return 0
 
 
