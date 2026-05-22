@@ -12,19 +12,30 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-_JSONL_PATH = Path("harness/results/corpus.jsonl")
-_META_PATH = Path("harness/results/run.meta.json")
+# Default to the relaxed (AFTER) corpus — the larger one — when no
+# argument is given. Pass an explicit path to summarize the literal
+# (BEFORE) corpus instead.
+_DEFAULT_JSONL = Path("harness/results/corpus.relaxed.jsonl")
 
 
-def _load() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    if not _JSONL_PATH.exists():
-        print(f"[report] missing {_JSONL_PATH}; run "
+def _load(jsonl_path: Path | None = None
+          ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    path = jsonl_path or _DEFAULT_JSONL
+    if not path.exists():
+        print(f"[report] missing {path}; run "
               f"`python -m harness.run_corpus` first",
               file=sys.stderr)
         sys.exit(2)
-    rows = [json.loads(l) for l in _JSONL_PATH.read_text().splitlines() if l]
-    meta = (json.loads(_META_PATH.read_text())
-            if _META_PATH.exists() else {})
+    rows = [json.loads(l) for l in path.read_text().splitlines() if l]
+    meta_candidates = [
+        path.with_suffix(".meta.json"),
+        path.parent / "run.meta.json",
+    ]
+    meta: dict[str, Any] = {}
+    for c in meta_candidates:
+        if c.exists():
+            meta = json.loads(c.read_text())
+            break
     return rows, meta
 
 
@@ -41,8 +52,9 @@ def _section(title: str) -> None:
     print("-" * 72)
 
 
-def main() -> int:
-    rows, meta = _load()
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    rows, meta = _load(Path(argv[0]) if argv else None)
     n = len(rows)
 
     _section("corpus shape")

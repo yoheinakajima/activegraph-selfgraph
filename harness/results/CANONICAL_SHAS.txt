@@ -6,7 +6,13 @@
 #
 # Generated on the deterministic floor (no LLM augmentation, sorted
 # os.walk + pkgutil.walk_packages + set iteration). See REPRODUCE.md.
+#
+# corpus.literal — SELFGRAPH_OBJECTTYPE_MATCH=literal (BEFORE).
+# corpus.relaxed — SELFGRAPH_OBJECTTYPE_MATCH=relaxed (AFTER).
+# Both are first-class reproducible; reproduce.sh runs and checks
+# both on every cold run.
 
-EXPECTED_CORPUS_SHA=74bd52ff901bc1bc
+EXPECTED_CORPUS_LITERAL_SHA=57a86e94ba5e211d
+EXPECTED_CORPUS_RELAXED_SHA=74bd52ff901bc1bc
 EXPECTED_ADVERSARIAL_SHA=09b408bd369dc89d
 EXPECTED_ROLLBACK_SHA=4e6333398e82e127

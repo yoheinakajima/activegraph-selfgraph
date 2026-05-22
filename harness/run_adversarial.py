@@ -57,7 +57,7 @@ from selfgraph.ingest import ingest_module_docs, ingest_paths
 _RESULTS_DIR = Path("harness/results")
 _JSONL_PATH = _RESULTS_DIR / "adversarial.jsonl"
 _META_PATH = _RESULTS_DIR / "adversarial.meta.json"
-_BENIGN_JSONL = _RESULTS_DIR / "corpus.jsonl"
+_BENIGN_JSONL = _RESULTS_DIR / "corpus.relaxed.jsonl"
 _DB_DIR = Path(".selfgraph-adversarial")
 _DB_PATH = _DB_DIR / "graph.db"
 

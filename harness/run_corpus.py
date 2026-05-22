@@ -312,6 +312,11 @@ def main(argv: list[str] | None = None) -> int:
         # deterministic floor (no LLM augmentation). False here means
         # the canonical shas apply.
         "llm_augment_active": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        # Which ObjectType match mode was active for this run. Empty
+        # string when the default is in force (== 'relaxed'); the env
+        # var is the canonical source of truth.
+        "objecttype_match_mode":
+            os.environ.get("SELFGRAPH_OBJECTTYPE_MATCH", "relaxed"),
     }
     meta_path.write_text(json.dumps(meta, indent=2))
 

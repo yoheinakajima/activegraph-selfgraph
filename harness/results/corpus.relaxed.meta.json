@@ -8,9 +8,10 @@
     "configure {name}"
   ],
   "db_path": ".selfgraph-harness/graph.db",
-  "jsonl_path": "harness/results/corpus.jsonl",
+  "jsonl_path": "harness/results/corpus.relaxed.jsonl",
   "jsonl_sha256_16": "74bd52ff901bc1bc",
   "fork_violations": [],
   "isolation_violations": [],
-  "llm_augment_active": false
+  "llm_augment_active": false,
+  "objecttype_match_mode": "relaxed"
 }

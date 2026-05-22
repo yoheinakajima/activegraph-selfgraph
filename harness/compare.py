@@ -152,7 +152,25 @@ def main(argv: list[str] | None = None) -> int:
           f"{_frac(a['sqlite_pct']):>18}")
     print(f"{'live_graph_unchanged':46} {_frac(b['isolated_pct']):>18} "
           f"{_frac(a['isolated_pct']):>18}")
-    return 0
+
+    # A/B cleanliness invariant: the selfgraph-derived grounding row
+    # must be byte-identical across conditions — that's the single-
+    # variable guarantee the paper's causal claim rests on. If this
+    # fails, the relaxation moved something we didn't think it moved.
+    print()
+    print("-" * 84)
+    print("A/B cleanliness invariant (selfgraph-derived grounding row)")
+    print("-" * 84)
+    bs = b["by_class_grounded"].get("selfgraph", (0, 0))
+    as_ = a["by_class_grounded"].get("selfgraph", (0, 0))
+    print(f"  BEFORE selfgraph-derived grounding   {_frac(bs)}")
+    print(f"  AFTER  selfgraph-derived grounding   {_frac(as_)}")
+    if bs == as_:
+        print(f"  → identical: single-variable A/B holds")
+        return 0
+    print(f"  → MISMATCH: relaxation moved the selfgraph row "
+          f"({bs} != {as_})", file=sys.stderr)
+    return 3
 
 
 if __name__ == "__main__":

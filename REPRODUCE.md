@@ -14,16 +14,17 @@ bash harness/reproduce.sh
 The script wipes any persisted state, runs the full pipeline cold,
 and asserts the regenerated files match these recorded shas:
 
-| file                      | sha256[:16]        |
-| ------------------------- | ------------------ |
-| `corpus.jsonl`            | `74bd52ff901bc1bc` |
-| `adversarial.jsonl`       | `09b408bd369dc89d` |
-| `rollback.jsonl`          | `4e6333398e82e127` |
+| file                      | sha256[:16]        | condition                                |
+| ------------------------- | ------------------ | ---------------------------------------- |
+| `corpus.literal.jsonl`    | `57a86e94ba5e211d` | `SELFGRAPH_OBJECTTYPE_MATCH=literal` (BEFORE) |
+| `corpus.relaxed.jsonl`    | `74bd52ff901bc1bc` | `SELFGRAPH_OBJECTTYPE_MATCH=relaxed` (AFTER)  |
+| `adversarial.jsonl`       | `09b408bd369dc89d` | (relaxed; flag doesn't affect this run)  |
+| `rollback.jsonl`          | `4e6333398e82e127` | (relaxed; flag doesn't affect this run)  |
 
-Three consecutive cold runs on the reference machine produce identical
-shas. If the script reports `MISMATCH` on yours, capture the diff and
-file an issue — that's a reproducibility regression and we want to
-know about it.
+Multiple consecutive cold runs on the reference machine produce
+identical shas. If the script reports `MISMATCH` on yours, capture
+the diff and file an issue — that's a reproducibility regression and
+we want to know about it.
 
 ## Environment
 
@@ -67,20 +68,23 @@ grep -nE 'anthropic|Anthropic|messages\.create|claude|llm_provider|LLMProvider' 
 
 ## What gets generated
 
-| file                               | what it records                                                                   |
-| ---------------------------------- | --------------------------------------------------------------------------------- |
-| `harness/results/corpus.jsonl`     | 72 mechanically-generated goals × propose → validate → sandbox(promote=False)     |
-| `harness/results/adversarial.jsonl`| 28 mechanical adversarial attempts, one row per attempt, with caught/expected     |
-| `harness/results/rollback.jsonl`   | 5 promote=True runs with byte-identical replay-to-before-promote                  |
-| `harness/results/*.meta.json`      | per-run aggregate (counts, llm-active flag, jsonl sha)                            |
+| file                                       | what it records                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `harness/results/corpus.literal.jsonl`     | 45 mechanical goals (BEFORE) × propose → validate → sandbox(promote=False)               |
+| `harness/results/corpus.relaxed.jsonl`     | 72 mechanical goals (AFTER) × propose → validate → sandbox(promote=False)                |
+| `harness/results/adversarial.jsonl`        | 28 mechanical adversarial attempts, one row per attempt, with caught/expected            |
+| `harness/results/rollback.jsonl`           | 5 promote=True runs with byte-identical replay-to-before-promote                         |
+| `harness/results/*.meta.json`              | per-run aggregate (counts, llm-active flag, objecttype-match-mode, jsonl sha)            |
 
 The aggregate tables are produced by:
 
 ```bash
 PYTHONPATH=. python -m harness.report
 PYTHONPATH=. python -m harness.compare \
-    harness/results/corpus.jsonl harness/results/corpus.jsonl
-PYTHONPATH=. python -m harness.query_self_authored
+    harness/results/corpus.literal.jsonl \
+    harness/results/corpus.relaxed.jsonl
+PYTHONPATH=. python -m harness.query_self_authored \
+    harness/results/corpus.relaxed.jsonl
 ```
 
 ## Determinism — what we did to make the shas portable
@@ -104,28 +108,46 @@ None of these change agent behavior. They change the *order* in which
 the same set of inputs is processed, which downstream pins the IDs
 and therefore the JSONL bytes.
 
-## Historical A/B (one-time research result, not reproduced here)
+## The extractor A/B (now first-class reproducible)
 
-An earlier measurement run compared the ObjectType extractor *before*
-its constructor-call relaxation against *after*. The relaxation is now
-the only extractor in the tree, so cold-run reproduction produces only
-the post-relaxation corpus. The A/B numbers — preserved for paper
-reference — were:
+The paper's key causal result compares the ObjectType extractor in
+two conditions, controlled by `SELFGRAPH_OBJECTTYPE_MATCH`:
 
-| metric                                    | BEFORE         | AFTER           |
-| ----------------------------------------- | -------------- | --------------- |
-| n_goals                                   | 45             | 72              |
-| derived_from_path_class = runtime         | 0              | 27              |
-| derived_from_path_class = selfgraph       | 45             | 45              |
-| grounding rate, runtime-derived           | n/a (0 denom)  | 18/27 (66.7%)   |
-| grounding rate, selfgraph-derived         | 27/45 (60.0%)  | 27/45 (60.0%)   |
-| fork_path == sqlite                       | 45/45 (100%)   | 72/72 (100%)    |
-| live_graph_unchanged                      | 45/45 (100%)   | 72/72 (100%)    |
+* `literal`: only the original `add_object("Cap", ...)` capitalized
+  literal regex (the BEFORE condition).
+* `relaxed` (default): adds the lowercase `ObjectType(name="...")`
+  constructor-call regex used by activegraph runtime packs (the
+  AFTER condition).
 
-The headline finding is that the selfgraph-derived row of the
-grounding table is byte-identical across the A/B — the BEFORE goals
-are unaffected by the relaxation, so the ONLY moving variable is the
-extractor rule.
+Any other value raises `ValueError` at extraction time — a typo
+cannot silently shift the canonical shas.
+
+`harness/reproduce.sh` runs the corpus pipeline twice on every cold
+run — once with each flag value — and emits `corpus.literal.jsonl`
+and `corpus.relaxed.jsonl`. The committed A/B table on the reference
+machine:
+
+| metric                                    | BEFORE (literal) | AFTER (relaxed)  |
+| ----------------------------------------- | ---------------- | ---------------- |
+| n_goals                                   | 45               | 72               |
+| derived_from_path_class = runtime         | 0                | 27               |
+| derived_from_path_class = selfgraph       | 45               | 45               |
+| grounding rate, runtime-derived           | n/a (0 denom)    | 18/27 (66.7%)    |
+| grounding rate, selfgraph-derived         | 27/45 (60.0%)    | 27/45 (60.0%)    |
+| origin mix — grounded-in-extracted        | 27/477 (5.7%)    | 54/747 (7.2%)    |
+| origin mix — built-in-scaffold            | 90/477 (18.9%)   | 126/747 (16.9%)  |
+| origin mix — self-authored                | 270/477 (56.6%)  | 432/747 (57.8%)  |
+| origin mix — domain-new                   | 90/477 (18.9%)   | 135/747 (18.1%)  |
+| fork_path == sqlite                       | 45/45 (100%)     | 72/72 (100%)     |
+| live_graph_unchanged                      | 45/45 (100%)     | 72/72 (100%)     |
+
+The cleanliness invariant `harness/compare.py` enforces at the end of
+every reproduce run: the **selfgraph-derived grounding row is
+byte-identical across conditions** (27/45 == 27/45). That single-
+variable guarantee — only the extractor rule moves — is what makes
+the runtime-derived 18/27 finding a causal result, not a confound.
+If that invariant fails on your machine `reproduce.sh` exits non-zero
+with a `MISMATCH` line.
 
 ## PatchProposal lifecycle, recapped
 

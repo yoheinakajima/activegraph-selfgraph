@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Cold-start reproduction script for the selfgraph paper artifacts.
 #
-# Wipes every persisted DB and harness result, regenerates all three
-# result files from scratch, and prints a sha-match table against the
-# canonical shas recorded in harness/results/CANONICAL_SHAS.txt.
+# Wipes every persisted DB and harness result, regenerates all FOUR
+# result files from scratch — the two corpus conditions (literal
+# extractor / BEFORE; relaxed extractor / AFTER), the adversarial
+# guardrail slice, and the rollback precondition — then prints the
+# A/B table from the two committed corpora and a sha-match table
+# against harness/results/CANONICAL_SHAS.txt.
 #
 # Requires:  Python 3.11+, `pip install -r requirements.txt`, and NO
 #            ANTHROPIC_API_KEY in the environment. The measured loop
 #            is LLM-free by construction (see REPRODUCE.md).
 #
 # Exit non-zero if any regenerated sha doesn't match the canonical
-# record — that means the run wasn't reproducible.
+# record OR the A/B cleanliness invariant (selfgraph-derived
+# grounding identical across conditions) fails.
 
 set -euo pipefail
 
@@ -22,7 +26,8 @@ if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   exit 64
 fi
 
-EXPECTED_CORPUS_SHA=""
+EXPECTED_CORPUS_LITERAL_SHA=""
+EXPECTED_CORPUS_RELAXED_SHA=""
 EXPECTED_ADVERSARIAL_SHA=""
 EXPECTED_ROLLBACK_SHA=""
 if [[ -f harness/results/CANONICAL_SHAS.txt ]]; then
@@ -40,19 +45,39 @@ mkdir -p harness/results
 export PYTHONPATH="${PYTHONPATH:-.}"
 
 echo
-echo "[reproduce] (1/3) benign corpus"
-python -m harness.run_corpus > /tmp/selfgraph-corpus.log 2>&1
-echo "    → harness/results/corpus.jsonl"
+echo "[reproduce] (1/4) benign corpus  —  MATCH=literal  (BEFORE)"
+SELFGRAPH_OBJECTTYPE_MATCH=literal \
+  python -m harness.run_corpus harness/results/corpus.literal.jsonl \
+  > /tmp/selfgraph-literal.log 2>&1
+echo "    → harness/results/corpus.literal.jsonl"
 
 echo
-echo "[reproduce] (2/3) adversarial guardrail slice"
-python -m harness.run_adversarial > /tmp/selfgraph-adv.log 2>&1
+echo "[reproduce] (2/4) benign corpus  —  MATCH=relaxed (AFTER)"
+SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
+  python -m harness.run_corpus harness/results/corpus.relaxed.jsonl \
+  > /tmp/selfgraph-relaxed.log 2>&1
+echo "    → harness/results/corpus.relaxed.jsonl"
+
+echo
+echo "[reproduce] (3/4) adversarial guardrail slice (MATCH=relaxed)"
+SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
+  python -m harness.run_adversarial > /tmp/selfgraph-adv.log 2>&1
 echo "    → harness/results/adversarial.jsonl"
 
 echo
-echo "[reproduce] (3/3) rollback precondition"
-python -m harness.rollback_precondition > /tmp/selfgraph-rb.log 2>&1
+echo "[reproduce] (4/4) rollback precondition (MATCH=relaxed)"
+SELFGRAPH_OBJECTTYPE_MATCH=relaxed \
+  python -m harness.rollback_precondition > /tmp/selfgraph-rb.log 2>&1
 echo "    → harness/results/rollback.jsonl"
+
+echo
+echo "============================================================"
+echo "  A/B table — BEFORE (literal) vs AFTER (relaxed)"
+echo "============================================================"
+python -m harness.compare \
+       harness/results/corpus.literal.jsonl \
+       harness/results/corpus.relaxed.jsonl
+ab_status=$?
 
 echo
 echo "============================================================"
@@ -78,9 +103,10 @@ check () {
   fi
 }
 
-check "corpus.jsonl"       harness/results/corpus.jsonl       "$EXPECTED_CORPUS_SHA"
-check "adversarial.jsonl"  harness/results/adversarial.jsonl  "$EXPECTED_ADVERSARIAL_SHA"
-check "rollback.jsonl"     harness/results/rollback.jsonl     "$EXPECTED_ROLLBACK_SHA"
+check "corpus.literal.jsonl"  harness/results/corpus.literal.jsonl  "$EXPECTED_CORPUS_LITERAL_SHA"
+check "corpus.relaxed.jsonl"  harness/results/corpus.relaxed.jsonl  "$EXPECTED_CORPUS_RELAXED_SHA"
+check "adversarial.jsonl"     harness/results/adversarial.jsonl     "$EXPECTED_ADVERSARIAL_SHA"
+check "rollback.jsonl"        harness/results/rollback.jsonl        "$EXPECTED_ROLLBACK_SHA"
 
 echo
 echo "  ok=$ok  fail=$fail"
@@ -89,4 +115,8 @@ if [[ "$fail" -gt 0 ]]; then
   echo "            See logs in /tmp/selfgraph-*.log" >&2
   exit 1
 fi
-echo "[reproduce] all regenerated shas match the canonical record."
+if [[ "$ab_status" -ne 0 ]]; then
+  echo "[reproduce] FAIL — A/B cleanliness invariant violated." >&2
+  exit "$ab_status"
+fi
+echo "[reproduce] all regenerated shas match and A/B invariant holds."

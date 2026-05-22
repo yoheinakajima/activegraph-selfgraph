@@ -55,13 +55,40 @@ _RE_OBJTYPE_HINT = re.compile(
 # activegraph runtime uses for its pack ObjectTypes (lowercase names
 # like ``"company"`` / ``"document"``); the original
 # ``_RE_OBJTYPE_HINT`` only catches capitalized identifiers and so
-# misses those. Both regexes run against every chunk and their
-# captures are unioned in ``_scan_chunk``. Nothing downstream
-# (``propose.py``, ``classify_change``) is changed — only what gets
-# extracted.
+# misses those. Whether both regexes run is controlled by the
+# ``SELFGRAPH_OBJECTTYPE_MATCH`` env var — see ``_objecttype_regexes``.
 _RE_OBJTYPE_CONSTRUCTOR = re.compile(
     r"ObjectType\(\s*name\s*=\s*[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']"
 )
+
+
+def _objecttype_regexes() -> list[re.Pattern[str]]:
+    """Return the regex set used to detect ObjectType names this run.
+
+    Controlled by the ``SELFGRAPH_OBJECTTYPE_MATCH`` env var:
+
+    * ``"relaxed"`` (default): both the literal-string regex and the
+      constructor-call regex — the AFTER condition for the paper's
+      A/B.
+    * ``"literal"``: only the literal-string regex — the BEFORE
+      condition.
+
+    The example patterns the two regexes catch are documented at the
+    regex definitions above, not here; embedding them in this
+    docstring would cause the extractor to match its own source text.
+
+    Any other value raises ``ValueError`` so a typo doesn't silently
+    fall through to a default that shifts the paper's shas.
+    """
+    mode = os.environ.get("SELFGRAPH_OBJECTTYPE_MATCH", "relaxed")
+    if mode == "literal":
+        return [_RE_OBJTYPE_HINT]
+    if mode == "relaxed":
+        return [_RE_OBJTYPE_HINT, _RE_OBJTYPE_CONSTRUCTOR]
+    raise ValueError(
+        f"SELFGRAPH_OBJECTTYPE_MATCH={mode!r}; expected "
+        f"'literal' or 'relaxed'"
+    )
 
 # Heuristic seed capabilities — the agent will still ground them in
 # extracted API/Behavior nodes, but we name them up front so the graph
@@ -244,8 +271,12 @@ def _scan_chunk(graph: Graph, chunk, seeded: dict[str, str]) -> dict:
     # ObjectType(name="...") constructor calls. Union of both regex
     # passes; the constructor pass picks up activegraph-runtime
     # lowercase names the original literal-string pass misses.
-    typenames = set(_RE_OBJTYPE_HINT.findall(text))
-    typenames |= set(_RE_OBJTYPE_CONSTRUCTOR.findall(text))
+    # Which ObjectType regexes run is gated by the
+    # SELFGRAPH_OBJECTTYPE_MATCH env var (literal | relaxed) so the
+    # paper's BEFORE/AFTER A/B is cold-reproducible.
+    typenames: set[str] = set()
+    for rx in _objecttype_regexes():
+        typenames |= set(rx.findall(text))
     # Iterate sorted so insertion order — and therefore generated
     # ObjectType IDs — are stable across Python invocations
     # (set iteration order depends on PYTHONHASHSEED). Pure

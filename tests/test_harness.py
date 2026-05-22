@@ -108,6 +108,60 @@ def test_classify_change_matches_citation_taxonomy():
         )
 
 
+def test_objecttype_match_flag_literal_excludes_runtime_object_types(monkeypatch=None):
+    """In SELFGRAPH_OBJECTTYPE_MATCH=literal mode the extractor must
+    NOT pick up the lowercase ObjectType(name="...") constructor
+    calls from activegraph runtime source — that's the whole BEFORE
+    condition for the paper's A/B."""
+    import os
+    import activegraph as ag
+    from selfgraph.ingest import ingest_paths
+    pkg = os.path.dirname(ag.__file__)
+    saved = os.environ.get("SELFGRAPH_OBJECTTYPE_MATCH")
+    os.environ["SELFGRAPH_OBJECTTYPE_MATCH"] = "literal"
+    try:
+        g = Graph(ids=IDGen(), run_id="literal-mode")
+        ingest_paths(g, [os.path.join(pkg, "packs")], max_bytes=400_000)
+        extract_capabilities(g, use_llm=False)
+        runtime_ots = [
+            o for o in g.objects(type="ObjectType")
+            if (o.data.get("source_file_path") or "").startswith(pkg)
+        ]
+        assert runtime_ots == [], (
+            f"literal mode should not emit runtime ObjectTypes; "
+            f"got {[o.data.get('name') for o in runtime_ots]}"
+        )
+    finally:
+        if saved is None:
+            os.environ.pop("SELFGRAPH_OBJECTTYPE_MATCH", None)
+        else:
+            os.environ["SELFGRAPH_OBJECTTYPE_MATCH"] = saved
+
+
+def test_objecttype_match_flag_invalid_value_raises():
+    """A typo'd flag value must fail loudly rather than silently
+    falling back to a default that would shift the paper's shas."""
+    import os
+    from selfgraph.extract import _objecttype_regexes
+    saved = os.environ.get("SELFGRAPH_OBJECTTYPE_MATCH")
+    os.environ["SELFGRAPH_OBJECTTYPE_MATCH"] = "lenient"
+    try:
+        try:
+            _objecttype_regexes()
+        except ValueError as e:
+            assert "lenient" in str(e)
+            return
+        raise AssertionError(
+            "expected ValueError for unknown SELFGRAPH_OBJECTTYPE_MATCH "
+            "value"
+        )
+    finally:
+        if saved is None:
+            os.environ.pop("SELFGRAPH_OBJECTTYPE_MATCH", None)
+        else:
+            os.environ["SELFGRAPH_OBJECTTYPE_MATCH"] = saved
+
+
 def test_relaxed_extractor_catches_runtime_object_types():
     """After the ObjectType regex relaxation, extractor must emit at
     least one ObjectType node whose source_file_path lives inside the

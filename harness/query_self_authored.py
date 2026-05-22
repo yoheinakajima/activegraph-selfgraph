@@ -6,7 +6,8 @@ the self-authored majority is fixed by-construction bookkeeping
 (the four evaluation criteria + the Task object every proposal
 emits + the scoped Policy), not variable agent-generated content.
 
-Usage:  python -m harness.query_self_authored [JSONL]   # default: corpus.jsonl
+Usage:  python -m harness.query_self_authored [JSONL]
+        # default: corpus.relaxed.jsonl
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 
-_DEFAULT_PATH = Path("harness/results/corpus.jsonl")
+_DEFAULT_PATH = Path("harness/results/corpus.relaxed.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:

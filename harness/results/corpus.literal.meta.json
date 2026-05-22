@@ -1,0 +1,17 @@
+{
+  "n_goals": 45,
+  "runtime_derived": 0,
+  "selfgraph_derived": 45,
+  "templates": [
+    "monitor {name}",
+    "track {name}",
+    "configure {name}"
+  ],
+  "db_path": ".selfgraph-harness/graph.db",
+  "jsonl_path": "harness/results/corpus.literal.jsonl",
+  "jsonl_sha256_16": "57a86e94ba5e211d",
+  "fork_violations": [],
+  "isolation_violations": [],
+  "llm_augment_active": false,
+  "objecttype_match_mode": "literal"
+}
